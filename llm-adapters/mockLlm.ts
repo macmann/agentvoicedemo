@@ -2,11 +2,19 @@ import { SessionState } from "@/types/session";
 
 export function generateMockResponse(state: SessionState): string {
   if (state.routing?.decision === "clarify") {
-    return "I heard that your router is blinking red, but I need one quick check before proceeding: are other devices in your home also offline right now?";
+    return state.routing.clarificationPrompt ?? "I want to make sure I understood you correctly. Could you clarify your request?";
   }
 
   if (state.handoff?.triggered) {
     return "I understand. I’m connecting you to a human specialist now and sharing your case details so you won’t need to repeat yourself.";
+  }
+
+  if (state.understanding?.empathyNeeded && state.understanding.workflowRequired) {
+    return "I’m sorry you’re dealing with that. I’ll take care of this for you now and run the requested support step.";
+  }
+
+  if (state.understanding?.intent === "empathy_only") {
+    return "I’m really sorry you’re going through that. I’m here with you, and if you want support with an account or service task, I can help right away.";
   }
 
   if (state.toolResult?.status === "failure") {

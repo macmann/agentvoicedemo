@@ -9,6 +9,19 @@ export type FlowNodeId =
 
 export type NodeVisualState = "idle" | "active" | "success" | "fallback" | "failure" | "handoff";
 
+export interface PolicyCounters {
+  sttFailures: number;
+  toolFailures: number;
+  lowConfidence: number;
+}
+
+export interface PolicyThresholdView {
+  minIntentConfidence: number;
+  lowConfidenceEscalationCount: number;
+  toolFailureEscalationCount: number;
+  sttFailureEscalationCount: number;
+}
+
 export interface SessionState {
   utterance: string;
   transcript?: string;
@@ -26,6 +39,11 @@ export interface SessionState {
   routing?: {
     decision: "workflow" | "no_workflow" | "handoff" | "clarify";
     workflowName?: string;
+    selectedRule?: string;
+    whyChosen?: string;
+    clarificationPrompt?: string;
+    clarificationReason?: string;
+    handoffReason?: string;
   };
   toolResult?: {
     toolName: string;
@@ -38,6 +56,20 @@ export interface SessionState {
     triggered: boolean;
     reason?: string;
     summary?: string;
+  };
+  policy?: {
+    counters: PolicyCounters;
+    thresholds: PolicyThresholdView;
+    selectedRule?: string;
+    whyChosen?: string;
+    confidenceThreshold?: number;
+    handoffRule?: string;
+    routingConfig?: {
+      intent: string;
+      decision: "workflow" | "no_workflow" | "handoff" | "clarify";
+      workflowName?: string;
+      reason: string;
+    };
   };
   latency?: {
     sttMs?: number;

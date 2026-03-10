@@ -1,7 +1,7 @@
 import { synthesizeMockSpeech } from "@/audio/mockAudio";
-import { executeMockTool } from "@/tools/mockTools";
 import { generateMockResponse } from "@/llm-adapters/mockLlm";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
+import { executeMockTool } from "@/tools/mockTools";
 import { FlowNodeId, SessionState } from "@/types/session";
 import { randomBetween } from "@/utils/format";
 
@@ -27,7 +27,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
           ...state,
           transcript: state.utterance,
           latency: { ...state.latency, sttMs }
-        };
+        } as SessionState;
       }
     },
     {
@@ -35,22 +35,43 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       label: "Intent and entities extracted",
       run: (state) => {
         const understandingMs = randomBetween(200, 600);
+        const evaluated = runDeterministicUnderstandingPolicy(state.utterance, { workflowMode: options.workflowMode }, state.policy?.counters);
 
         return {
           ...state,
-          understanding: runDeterministicUnderstandingPolicy(state.utterance, { workflowMode: options.workflowMode }),
+          understanding: evaluated.understanding,
+          policy: {
+            ...evaluated.policy,
+            counters: {
+              ...evaluated.policy.counters,
+              sttFailures: evaluated.sttFailureHint ? evaluated.policy.counters.sttFailures + 1 : evaluated.policy.counters.sttFailures,
+              lowConfidence:
+                evaluated.understanding.intentConfidence < evaluated.policy.thresholds.minIntentConfidence
+                  ? evaluated.policy.counters.lowConfidence + 1
+                  : evaluated.policy.counters.lowConfidence
+            }
+          },
           latency: { ...state.latency, understandingMs }
-        };
+        } as SessionState;
       }
     },
     {
       id: "decision",
       label: "Route selected",
       run: (state) => {
+        const routing = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
         return {
           ...state,
-          routing: runDeterministicRoutingPolicy(state.understanding)
-        };
+          routing,
+          responseText: routing.decision === "clarify" ? routing.clarificationPrompt : state.responseText,
+          policy: state.policy
+            ? {
+                ...state.policy,
+                selectedRule: routing.selectedRule,
+                whyChosen: routing.whyChosen
+              }
+            : state.policy
+        } as SessionState;
       }
     },
     {
@@ -66,15 +87,25 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
               result: { skipped: true, reason: `routing=${state.routing?.decision}` }
             },
             latency: { ...state.latency, toolMs: 0 }
-          };
+          } as SessionState;
         }
 
         const toolMs = randomBetween(100, 1200);
+        const toolResult = executeMockTool(state, options.forceFallback);
         return {
           ...state,
-          toolResult: executeMockTool(state, options.forceFallback),
+          toolResult,
+          policy: state.policy
+            ? {
+                ...state.policy,
+                counters: {
+                  ...state.policy.counters,
+                  toolFailures: toolResult.status === "failure" ? state.policy.counters.toolFailures + 1 : state.policy.counters.toolFailures
+                }
+              }
+            : state.policy,
           latency: { ...state.latency, toolMs }
-        };
+        } as SessionState;
       }
     },
     {
@@ -87,7 +118,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
           responseText: generateMockResponse(state),
           handoff: runDeterministicHandoffPolicy(state),
           latency: { ...state.latency, responseMs }
-        };
+        } as SessionState;
       }
     },
     {
@@ -100,7 +131,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
         return {
           ...state,
           latency: { ...state.latency, ttsMs, totalMs }
-        };
+        } as SessionState;
       }
     },
     {
@@ -115,7 +146,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
             ? state.handoff.summary ?? "Session packaged for human agent transfer."
             : "No handoff required for this interaction."
         }
-      })
+      } as SessionState)
     }
   ];
 }

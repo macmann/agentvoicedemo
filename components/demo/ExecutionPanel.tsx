@@ -28,7 +28,7 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
           )}
         </ul>
 
-        <div className="space-y-2 text-sm">
+        <div className="space-y-3 text-sm">
           {stages.map((stage) => (
             <div key={stage.label}>
               <div className="mb-1 flex justify-between">
@@ -44,6 +44,21 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
             </div>
           ))}
           <div className="pt-2 font-semibold">Total: {formatMs(session.latency?.totalMs)}</div>
+
+          <div className="rounded border border-slate-200 p-2">
+            <p className="font-medium">Policy thresholds</p>
+            <p className="text-slate-600">Intent confidence: {session.policy?.thresholds.minIntentConfidence ?? "—"}</p>
+            <p className="text-slate-600">Low-confidence escalation: {session.policy?.thresholds.lowConfidenceEscalationCount ?? "—"}</p>
+            <p className="text-slate-600">Tool-failure escalation: {session.policy?.thresholds.toolFailureEscalationCount ?? "—"}</p>
+            <p className="text-slate-600">STT-failure escalation: {session.policy?.thresholds.sttFailureEscalationCount ?? "—"}</p>
+          </div>
+
+          <div className="rounded border border-slate-200 p-2">
+            <p className="font-medium">Retry counters</p>
+            <p className="text-slate-600">STT failures: {session.policy?.counters.sttFailures ?? 0}</p>
+            <p className="text-slate-600">Tool failures: {session.policy?.counters.toolFailures ?? 0}</p>
+            <p className="text-slate-600">Low-confidence turns: {session.policy?.counters.lowConfidence ?? 0}</p>
+          </div>
         </div>
       </div>
     </section>

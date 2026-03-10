@@ -68,7 +68,7 @@ export function VoiceAiDemoApp() {
           <ArchitectureFlow selectedNode={selectedNode} onSelectNode={setSelectedNode} states={nodeStates} traversedEdges={traversedEdges} />
         </div>
 
-        <NodeDetailPanel nodeId={selectedNode} />
+        <NodeDetailPanel nodeId={selectedNode} session={session} />
       </div>
 
       <ExecutionPanel logs={logs} session={session} />

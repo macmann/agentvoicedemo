@@ -1,7 +1,7 @@
 import { SessionState } from "@/types/session";
 
 export function executeMockTool(state: SessionState, forceFallback: boolean) {
-  const utterance = state.utterance.toLowerCase();
+  const workflow = state.routing?.workflowName;
 
   if (forceFallback) {
     return {
@@ -11,20 +11,12 @@ export function executeMockTool(state: SessionState, forceFallback: boolean) {
     };
   }
 
-  if (utterance.includes("outage") || utterance.includes("internet") || utterance.includes("router")) {
-    if (utterance.includes("router") && utterance.includes("blinking red")) {
+  if (workflow === "diagnose_connectivity") {
+    if (state.understanding?.intent === "report_router_issue") {
       return {
         toolName: "DeviceDiagnostics",
         status: "success" as const,
         result: { diagnosticCode: "LOS_RED", recommendation: "power_cycle_then_check_cable", outageDetected: false }
-      };
-    }
-
-    if (utterance.includes("outage")) {
-      return {
-        toolName: "OutageLookupAPI",
-        status: "success" as const,
-        result: { outageDetected: true, eta: "2 hours", area: "ZIP 90210", incidentId: "INC-44721" }
       };
     }
 
@@ -35,7 +27,15 @@ export function executeMockTool(state: SessionState, forceFallback: boolean) {
     };
   }
 
-  if (utterance.includes("reschedule") || utterance.includes("technician")) {
+  if (workflow === "check_outage_status") {
+    return {
+      toolName: "OutageLookupAPI",
+      status: "success" as const,
+      result: { outageDetected: true, eta: "2 hours", area: "ZIP 90210", incidentId: "INC-44721" }
+    };
+  }
+
+  if (workflow === "reschedule_technician") {
     return {
       toolName: "AppointmentManager",
       status: "success" as const,

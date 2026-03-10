@@ -27,7 +27,7 @@ export const nodeCatalog: NodeDetails[] = [
     purpose: "Select deterministic workflow path and guardrails before free-form generation.",
     input: "Understanding object",
     output: "Routing decision + workflow name",
-    parameters: ["workflowCatalog=incident+appointments", "fallbackOnUnknown=true"],
+    parameters: ["routingTable=static-intent-map", "confidenceThreshold=0.72", "fallbackOnUnknown=clarify"],
     latencyEstimate: "40-90ms",
     fallbackBehavior: "Switch to no-workflow answer or human handoff path."
   },
