@@ -1,19 +1,21 @@
 import { synthesizeMockSpeech } from "@/audio/mockAudio";
 import { generateMockResponse } from "@/llm-adapters/mockLlm";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
-import { executeMockTool } from "@/tools/mockTools";
+import { runToolExecution } from "@/tools/toolRunner";
+import { ToolExecutionMode } from "@/tools/toolTypes";
 import { FlowNodeId, SessionState } from "@/types/session";
 import { randomBetween } from "@/utils/format";
 
 export interface SimulationOptions {
   forceFallback: boolean;
   workflowMode: "auto" | "workflow" | "no_workflow";
+  toolMode: ToolExecutionMode;
 }
 
 export interface SimulationStep {
   id: FlowNodeId;
   label: string;
-  run: (state: SessionState) => SessionState;
+  run: (state: SessionState) => Promise<SessionState>;
 }
 
 export function buildSimulationSteps(options: SimulationOptions): SimulationStep[] {
@@ -21,7 +23,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
     {
       id: "stt",
       label: "Speech recognized",
-      run: (state) => {
+      run: async (state) => {
         const sttMs = randomBetween(300, 700);
         return {
           ...state,
@@ -33,7 +35,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
     {
       id: "understanding",
       label: "Intent and entities extracted",
-      run: (state) => {
+      run: async (state) => {
         const understandingMs = randomBetween(200, 600);
         const evaluated = runDeterministicUnderstandingPolicy(
           state.utterance,
@@ -65,7 +67,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
     {
       id: "decision",
       label: "Route selected",
-      run: (state) => {
+      run: async (state) => {
         const routing = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
         return {
           ...state,
@@ -84,11 +86,21 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
     {
       id: "toolExecution",
       label: "Tool execution completed",
-      run: (state) => {
+      run: async (state) => {
         if (state.routing?.decision !== "workflow") {
           return {
             ...state,
+            toolExecution: {
+              selectedTool: "create_support_ticket",
+              requestPayload: { skipped: true },
+              responsePayload: { skipped: true, reason: `routing=${state.routing?.decision}` },
+              executionStatus: "success",
+              executionTimeMs: 0,
+              executionMode: options.toolMode,
+              fallbackBehavior: "No tool executed for non-workflow path."
+            },
             toolResult: {
+              provider: options.toolMode === "mock" ? "mock_local" : "api",
               toolName: "none",
               status: "success",
               result: { skipped: true, reason: `routing=${state.routing?.decision}` }
@@ -97,10 +109,14 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
           } as SessionState;
         }
 
-        const toolMs = randomBetween(100, 1200);
-        const toolResult = executeMockTool(state, options.forceFallback);
+        const { toolResult, record } = await runToolExecution(state, {
+          forceFallback: options.forceFallback,
+          modeOverride: options.toolMode
+        });
+
         return {
           ...state,
+          toolExecution: record,
           toolResult,
           policy: state.policy
             ? {
@@ -111,14 +127,14 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
                 }
               }
             : state.policy,
-          latency: { ...state.latency, toolMs }
+          latency: { ...state.latency, toolMs: record.executionTimeMs }
         } as SessionState;
       }
     },
     {
       id: "responseGeneration",
       label: "LLM response drafted",
-      run: (state) => {
+      run: async (state) => {
         const responseMs = randomBetween(250, 700);
         return {
           ...state,
@@ -131,7 +147,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
     {
       id: "tts",
       label: "Speech synthesized",
-      run: (state) => {
+      run: async (state) => {
         const ttsMs = randomBetween(150, 400);
         synthesizeMockSpeech(state.responseText ?? "");
         const totalMs = (state.latency?.sttMs ?? 0) + (state.latency?.understandingMs ?? 0) + (state.latency?.toolMs ?? 0) + (state.latency?.responseMs ?? 0) + ttsMs;
@@ -144,7 +160,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
     {
       id: "handoff",
       label: "Handoff evaluated",
-      run: (state) => ({
+      run: async (state) => ({
         ...state,
         handoff: {
           ...state.handoff,

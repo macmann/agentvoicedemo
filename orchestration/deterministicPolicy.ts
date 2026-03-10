@@ -34,8 +34,10 @@ export function runDeterministicRoutingPolicy(state: Pick<SessionState, "underst
 }
 
 export function runDeterministicHandoffPolicy(state: SessionState): NonNullable<SessionState["handoff"]> {
-  const triggered = state.routing?.decision === "handoff" || state.toolResult?.status === "failure";
-  const reason = state.routing?.handoffReason ?? (state.toolResult?.status === "failure" ? state.toolResult.error : undefined);
+  const toolFailureThreshold = state.policy?.thresholds.toolFailureEscalationCount ?? 2;
+  const repeatedToolFailures = (state.policy?.counters.toolFailures ?? 0) >= toolFailureThreshold;
+  const triggered = state.routing?.decision === "handoff" || repeatedToolFailures;
+  const reason = state.routing?.handoffReason ?? (repeatedToolFailures ? "tool_failures_threshold" : undefined);
 
   return {
     triggered,

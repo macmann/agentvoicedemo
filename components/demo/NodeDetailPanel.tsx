@@ -5,6 +5,7 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
   const node = nodeCatalog.find((item) => item.id === nodeId) ?? nodeCatalog[0];
   const isDecisionNode = nodeId === "decision";
   const isUnderstandingNode = nodeId === "understanding";
+  const isToolNode = nodeId === "toolExecution";
 
   return (
     <aside className="h-full rounded-xl border border-slate-200 bg-white p-4">
@@ -71,6 +72,44 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             <div>
               <dt className="font-medium text-slate-500">Fallback behavior</dt>
               <dd>{session.understandingDiagnostics?.fallbackBehavior ?? "—"}</dd>
+            </div>
+          </>
+        ) : null}
+
+
+        {isToolNode ? (
+          <>
+            <div>
+              <dt className="font-medium text-slate-500">Selected tool</dt>
+              <dd>{session.toolExecution?.selectedTool ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Execution mode</dt>
+              <dd>{session.toolExecution?.executionMode ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Execution status</dt>
+              <dd>{session.toolExecution?.executionStatus ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Execution time</dt>
+              <dd>{session.toolExecution?.executionTimeMs ?? "—"}ms</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Endpoint</dt>
+              <dd className="break-all">{session.toolExecution?.endpoint ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Request payload</dt>
+              <dd className="break-all">{session.toolExecution ? JSON.stringify(session.toolExecution.requestPayload) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Response payload</dt>
+              <dd className="break-all">{session.toolExecution ? JSON.stringify(session.toolExecution.responsePayload ?? session.toolExecution.errorMessage) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Fallback behavior</dt>
+              <dd>{session.toolExecution?.fallbackBehavior ?? "—"}</dd>
             </div>
           </>
         ) : null}

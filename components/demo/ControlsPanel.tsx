@@ -1,13 +1,17 @@
+import { ToolExecutionMode } from "@/tools/toolTypes";
+
 interface Props {
   utterance: string;
   sampleUtterances: string[];
   stepMode: boolean;
   forceFallback: boolean;
   workflowMode: "auto" | "workflow" | "no_workflow";
+  toolMode: ToolExecutionMode;
   onUtteranceChange: (value: string) => void;
   onStepModeChange: (value: boolean) => void;
   onForceFallbackChange: (value: boolean) => void;
   onWorkflowModeChange: (value: "auto" | "workflow" | "no_workflow") => void;
+  onToolModeChange: (value: ToolExecutionMode) => void;
   onRun: () => void;
   onNext: () => void;
   onReset: () => void;
@@ -69,6 +73,18 @@ export function ControlsPanel(props: Props) {
             <option value="auto">Auto detect</option>
             <option value="workflow">Force workflow</option>
             <option value="no_workflow">Force no-workflow</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block font-medium text-slate-600">Tool execution mode</span>
+          <select
+            className="w-full rounded border border-slate-300 p-2"
+            value={props.toolMode}
+            onChange={(e) => props.onToolModeChange(e.target.value as ToolExecutionMode)}
+          >
+            <option value="mock">Mock local tools</option>
+            <option value="api">API-backed adapter (stub)</option>
           </select>
         </label>
 

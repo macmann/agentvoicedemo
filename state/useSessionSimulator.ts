@@ -24,7 +24,7 @@ export function useSessionSimulator(initialUtterance: string) {
   const [running, setRunning] = useState(false);
   const [traversedEdges, setTraversedEdges] = useState<string[]>([]);
 
-  const activeSteps = useMemo(() => buildSimulationSteps({ forceFallback: false, workflowMode: "auto" }), []);
+  const activeSteps = useMemo(() => buildSimulationSteps({ forceFallback: false, workflowMode: "auto", toolMode: "mock" }), []);
 
   const setSessionState: Dispatch<SetStateAction<SessionState>> = (value) => {
     setSession((prev) => {
@@ -33,7 +33,6 @@ export function useSessionSimulator(initialUtterance: string) {
       return next;
     });
   };
-
 
   const reset = (utterance: string) => {
     const resetSession = { utterance };
@@ -97,42 +96,36 @@ export function useSessionSimulator(initialUtterance: string) {
       }
     }
 
-    let nextSession: SessionState | undefined;
+    const next = await step.run(sessionRef.current);
 
-    setSessionState((prev) => {
-      const next = step.run(prev);
-      sessionRef.current = next;
-      nextSession = next;
-      setNodeStates((nodePrev) => ({
-        ...nodePrev,
-        [step.id]:
-          next.handoff?.triggered && step.id === "handoff"
-            ? "handoff"
-            : next.toolResult?.status === "failure" && step.id === "toolExecution"
+    setSessionState(next);
+    setNodeStates((nodePrev) => ({
+      ...nodePrev,
+      [step.id]:
+        next.handoff?.triggered && step.id === "handoff"
+          ? "handoff"
+          : next.toolResult?.status === "failure" && step.id === "toolExecution"
+            ? "fallback"
+            : next.routing?.decision === "clarify" && step.id === "decision"
               ? "fallback"
-              : next.routing?.decision === "clarify" && step.id === "decision"
-                ? "fallback"
-                : "success"
-      }));
-      setLogs((logPrev) => [
-        {
-          id: `${Date.now()}-${step.id}`,
-          stage: step.label,
-          message:
-            step.id === "decision" && next.routing?.decision === "clarify"
-              ? `decision completed: clarify (${next.routing.clarificationReason})`
+              : "success"
+    }));
+    setLogs((logPrev) => [
+      {
+        id: `${Date.now()}-${step.id}`,
+        stage: step.label,
+        message:
+          step.id === "decision" && next.routing?.decision === "clarify"
+            ? `decision completed: clarify (${next.routing.clarificationReason})`
+            : step.id === "toolExecution"
+              ? `${next.toolExecution?.selectedTool ?? "tool"} ${next.toolExecution?.executionStatus ?? "completed"} (${next.toolExecution?.executionMode ?? "mock"})`
               : `${step.id} completed`,
-          timestamp: new Date().toLocaleTimeString()
-        },
-        ...logPrev
-      ]);
-      return next;
-    });
+        timestamp: new Date().toLocaleTimeString()
+      },
+      ...logPrev
+    ]);
 
-    if (nextSession) {
-      await new Promise((resolve) => setTimeout(resolve, Math.max(60, getLatencyForStep(step.id, nextSession!))));
-    }
-
+    await new Promise((resolve) => setTimeout(resolve, Math.max(60, getLatencyForStep(step.id, next))));
     setStepIndex(index + 1);
     setRunning(false);
   };

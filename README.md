@@ -47,3 +47,23 @@ If model output is malformed, the adapter falls back safely to mock/unclear beha
 ## Safety note
 
 Structured model output never directly executes tools. The existing deterministic routing/policy layer remains the action gate.
+
+## Tool Execution subsystem
+
+Tool execution is implemented as a typed subsystem under `tools/`:
+
+- `toolTypes.ts`: typed tool contracts (request/response per tool)
+- `toolConfigs.ts`: per-tool mode/endpoint/timeout/fallback config
+- `registry.ts`: tool registry that dispatches each tool by name
+- `mockTools.ts`: deterministic demo-friendly local behavior
+- `apiTools.ts`: fetch-based API adapter with timeout/error handling
+- `toolRunner.ts`: orchestration entrypoint that selects tools, validates payloads, executes, and returns inspectable execution records
+
+Supported tools:
+
+- `diagnose_connectivity()`
+- `check_outage_status(postcode)`
+- `reschedule_technician(date)`
+- `create_support_ticket(summary)`
+
+Switching mock vs API mode is done in demo controls and requires no orchestration rewrite.
