@@ -29,7 +29,8 @@ export function runDeterministicRoutingPolicy(state: Pick<SessionState, "underst
     whyChosen: decision.reason,
     clarificationPrompt: decision.clarificationPrompt,
     clarificationReason: decision.clarificationReason,
-    handoffReason: decision.handoffReason
+    handoffReason: decision.handoffReason,
+    dialogueState: decision.decision === "handoff" ? "handoff" : decision.decision === "workflow" ? "ready_to_execute" : decision.decision === "clarify" ? "awaiting_missing_info" : "responding"
   };
 }
 

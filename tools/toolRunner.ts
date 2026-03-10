@@ -12,29 +12,47 @@ export interface ToolRunnerOptions {
 function toToolName(workflowName?: string): ToolName {
   if (workflowName === "diagnose_connectivity") return "diagnose_connectivity";
   if (workflowName === "check_outage_status") return "check_outage_status";
+  if (workflowName === "fetch_notifications") return "fetch_notifications";
+  if (workflowName === "fetch_service_status") return "fetch_service_status";
   if (workflowName === "reschedule_technician") return "reschedule_technician";
   return "create_support_ticket";
 }
 
 function buildRequest(state: SessionState, toolName: ToolName): ToolRequestByName[ToolName] {
   const entities = state.understanding?.entities ?? {};
+  const slots = state.conversation?.collectedSlots ?? {};
 
   if (toolName === "diagnose_connectivity") {
     return {
-      account_id: entities.accountId,
-      symptom: entities.symptom ?? state.utterance
+      account_id: entities.accountId ?? slots.accountId,
+      symptom: entities.symptom ?? slots.symptom ?? state.utterance,
+      serviceName: entities.serviceNameOrRegion ?? slots.serviceNameOrRegion,
+      device: entities.device ?? slots.device
     };
   }
 
   if (toolName === "check_outage_status") {
     return {
-      postcode: entities.postcode ?? entities.zip ?? "UNKNOWN"
+      serviceNameOrRegion: entities.serviceNameOrRegion ?? slots.serviceNameOrRegion ?? slots.postcode,
+      active: true
+    };
+  }
+
+  if (toolName === "fetch_service_status") {
+    return { active: true };
+  }
+
+  if (toolName === "fetch_notifications") {
+    return {
+      active: true,
+      from: entities.from,
+      to: entities.to
     };
   }
 
   if (toolName === "reschedule_technician") {
     return {
-      date: entities.date ?? entities.appointment_date ?? "today"
+      date: entities.date ?? entities.appointment_date ?? slots.date ?? ""
     };
   }
 
@@ -44,14 +62,12 @@ function buildRequest(state: SessionState, toolName: ToolName): ToolRequestByNam
 }
 
 function validateRequest(toolName: ToolName, request: ToolRequestByName[ToolName]): string | undefined {
-  if (toolName === "check_outage_status" && !(request as ToolRequestByName["check_outage_status"]).postcode) {
-    return "Invalid parameters: postcode is required";
+  if (toolName === "check_outage_status" && !(request as ToolRequestByName["check_outage_status"]).serviceNameOrRegion) {
+    return "Invalid parameters: serviceNameOrRegion is required";
   }
-
   if (toolName === "reschedule_technician" && !(request as ToolRequestByName["reschedule_technician"]).date) {
     return "Invalid parameters: date is required";
   }
-
   if (toolName === "create_support_ticket" && !(request as ToolRequestByName["create_support_ticket"]).summary) {
     return "Invalid parameters: summary is required";
   }

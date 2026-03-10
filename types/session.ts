@@ -76,7 +76,57 @@ export interface ResponseGenerationContext {
   workflowResult: string;
   handoffState: string;
   clarificationState: string;
+  pendingWorkflowState?: string;
   policyInstructions: string;
+}
+
+export interface PendingWorkflowState {
+  workflowName: "diagnose_connectivity" | "check_outage_status" | "reschedule_technician" | "create_support_ticket";
+  status: "awaiting_input" | "ready" | "running" | "completed" | "cancelled";
+  requiredSlots: string[];
+  missingSlots: string[];
+  collectedSlots: Record<string, string>;
+  clarificationPrompt?: string;
+  originalIntent?: string;
+  attempts: number;
+}
+
+export interface ConversationTurn {
+  id: string;
+  role: "user" | "assistant" | "system";
+  text: string;
+  createdAt: string;
+  transcript?: string;
+  intent?: string;
+  entities?: Record<string, string>;
+  routingDecision?: string;
+  workflowName?: string;
+  toolName?: string;
+  toolResult?: unknown;
+  latencyMs?: number;
+  status?: "final" | "thinking" | "listening" | "tool_running" | "fallback";
+}
+
+export interface ConversationState {
+  conversationId: string;
+  turns: ConversationTurn[];
+  currentStatus: "idle" | "listening" | "processing" | "awaiting_user_input" | "speaking" | "handoff";
+  activeIntent?: string;
+  pendingWorkflow?: PendingWorkflowState;
+  pendingSlots: string[];
+  collectedSlots: Record<string, string>;
+  lastAssistantQuestion?: string;
+  lastToolResult?: unknown;
+  lastHandoffState?: {
+    triggered: boolean;
+    reason?: string;
+    summary?: string;
+  };
+  fallbackState?: {
+    triggered: boolean;
+    reason?: string;
+    errorType?: string;
+  };
 }
 
 export interface ResponseGenerationDiagnostics {
@@ -108,7 +158,7 @@ export interface TtsDiagnostics {
 }
 
 export interface ToolExecutionView {
-  selectedTool: "diagnose_connectivity" | "check_outage_status" | "reschedule_technician" | "create_support_ticket";
+  selectedTool: "diagnose_connectivity" | "check_outage_status" | "fetch_service_status" | "fetch_notifications" | "reschedule_technician" | "create_support_ticket";
   requestPayload: Record<string, unknown>;
   responsePayload?: Record<string, unknown>;
   executionStatus: "success" | "failure";
@@ -133,6 +183,7 @@ export interface SessionState {
   sttStreamingSimulated?: boolean;
   stt?: SttDiagnostics;
   transcript?: string;
+  conversation?: ConversationState;
   understanding?: StructuredUnderstandingResult;
   understandingProviderResult?: {
     understanding: StructuredUnderstandingResult;
@@ -147,6 +198,7 @@ export interface SessionState {
     clarificationPrompt?: string;
     clarificationReason?: string;
     handoffReason?: string;
+    dialogueState?: "awaiting_missing_info" | "ready_to_execute" | "executing_tool" | "responding" | "handoff";
   };
   toolExecution?: ToolExecutionView;
   toolResult?: {

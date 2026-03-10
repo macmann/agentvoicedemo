@@ -3,6 +3,8 @@ import {
   mockCheckOutageStatus,
   mockCreateSupportTicket,
   mockDiagnoseConnectivity,
+  mockFetchNotifications,
+  mockFetchServiceStatus,
   mockRescheduleTechnician
 } from "@/tools/mockTools";
 import { ToolExecutionResult, ToolName, ToolRequestByName } from "@/tools/toolTypes";
@@ -17,6 +19,8 @@ export type ToolRegistry = {
 const mockExecutors = {
   diagnose_connectivity: (request: ToolRequestByName["diagnose_connectivity"]) => Promise.resolve(mockDiagnoseConnectivity(request)),
   check_outage_status: (request: ToolRequestByName["check_outage_status"]) => Promise.resolve(mockCheckOutageStatus(request)),
+  fetch_service_status: (request: ToolRequestByName["fetch_service_status"]) => Promise.resolve(mockFetchServiceStatus(request)),
+  fetch_notifications: (request: ToolRequestByName["fetch_notifications"]) => Promise.resolve(mockFetchNotifications(request)),
   reschedule_technician: (request: ToolRequestByName["reschedule_technician"]) => Promise.resolve(mockRescheduleTechnician(request)),
   create_support_ticket: (request: ToolRequestByName["create_support_ticket"]) => Promise.resolve(mockCreateSupportTicket(request))
 };
@@ -27,6 +31,10 @@ export function createToolRegistry(configs: ToolConfigMap): ToolRegistry {
       config.mode === "api" ? executeApiTool("diagnose_connectivity", request, config) : mockExecutors.diagnose_connectivity(request),
     check_outage_status: async (request, config) =>
       config.mode === "api" ? executeApiTool("check_outage_status", request, config) : mockExecutors.check_outage_status(request),
+    fetch_service_status: async (request, config) =>
+      config.mode === "api" ? executeApiTool("fetch_service_status", request, config) : mockExecutors.fetch_service_status(request),
+    fetch_notifications: async (request, config) =>
+      config.mode === "api" ? executeApiTool("fetch_notifications", request, config) : mockExecutors.fetch_notifications(request),
     reschedule_technician: async (request, config) =>
       config.mode === "api" ? executeApiTool("reschedule_technician", request, config) : mockExecutors.reschedule_technician(request),
     create_support_ticket: async (request, config) =>

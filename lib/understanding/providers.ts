@@ -11,6 +11,7 @@ const KNOWN_INTENTS: UnderstoodIntent[] = [
   "outage_check",
   "reschedule_visit",
   "talk_to_human",
+  "announcement_check",
   "empathy_only",
   "unclear"
 ];
@@ -24,7 +25,7 @@ function buildSystemPrompt() {
     "Extract entities as Record<string,string>.",
     "Detect sentiment and empathy cue.",
     "Determine if workflow execution is needed.",
-    "If workflow is needed, recommend one of: diagnose_connectivity, check_outage_status, reschedule_technician.",
+    "If workflow is needed, recommend one of: diagnose_connectivity, check_outage_status, fetch_notifications, reschedule_technician.",
     "Recommend handoff only when clearly requested or the user cannot proceed with automation.",
     "Do not hallucinate unsupported workflows or intents.",
     "Schema:",

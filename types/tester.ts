@@ -12,10 +12,16 @@ export interface TesterDebugState {
   toolCalled?: string;
   toolOutput?: unknown;
   routingDecision?: string;
+  dialogueState?: string;
   handoffTriggered?: boolean;
   handoffReason?: string;
   handoffSummary?: string;
   providerMode: "mock" | "live" | "mixed";
+  toolExecutionMode?: "mock" | "api";
+  pendingWorkflow?: string;
+  pendingWorkflowStatus?: string;
+  missingSlots?: string[];
+  collectedSlots?: Record<string, string>;
   latency: {
     sttMs?: number;
     understandingMs?: number;

@@ -7,17 +7,27 @@ const GUARDRAIL_NOTE = "Unsupported facts must not be invented. Use only structu
 
 function mockFromContext(context: ResponseGenerationContext) {
   if (context.workflowPath === "clarify") return context.clarificationState;
+  if (context.pendingWorkflowState?.includes("awaiting_input")) return context.clarificationState;
   if (context.workflowPath === "handoff" || context.handoffState.startsWith("Handoff required")) {
     return "I’m transferring you to a specialist now and sharing your case details so you won’t need to repeat yourself.";
   }
-  if (context.workflowResult.includes("check_outage_status") && context.workflowResult.includes("succeeded")) {
-    return "I’m sorry about the interruption. There is a confirmed outage in your area, and service is expected back in about 2 hours.";
+  if (context.workflowResult.includes("\"overallStatus\":\"PARTIAL_OUTAGE\"")) {
+    return "Yes, Core Internet is currently experiencing a partial outage. We expect recovery in about 2 hours. Is there anything else I can help you with?";
+  }
+  if (context.workflowResult.includes("\"overallStatus\":\"MAJOR_OUTAGE\"")) {
+    return "There is a major outage affecting that service right now. Our teams are actively working on restoration.";
+  }
+  if (context.workflowResult.includes("\"clarificationNeeded\":true")) {
+    return "I couldn’t confidently identify the service or region. Could you tell me the exact service name?";
+  }
+  if (context.workflowResult.includes("fetch_notifications") && context.workflowResult.includes("succeeded")) {
+    return "I checked the latest announcements and found active service notifications. I can read the latest one if you want.";
   }
   if (context.workflowResult.includes("reschedule_technician") && context.workflowResult.includes("succeeded")) {
     return "I’m sorry you’re not feeling well. Your technician visit has been rescheduled, and I can send a confirmation if you’d like.";
   }
   if (context.empathyNeeded && context.workflowResult.includes("No workflow action")) {
-    return "I’m really sorry you’re dealing with that. I’m here with you, and I can help with any next step whenever you’re ready.";
+    return "I’m really sorry you’re dealing with that. I’m here with you, and I can help with the next step whenever you’re ready.";
   }
   if (context.workflowResult.includes("failed")) {
     return "I’m sorry — I couldn’t complete that action right now. I can connect you to a specialist immediately.";

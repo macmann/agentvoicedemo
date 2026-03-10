@@ -4,6 +4,7 @@ export type UnderstoodIntent =
   | "outage_check"
   | "reschedule_visit"
   | "talk_to_human"
+  | "announcement_check"
   | "empathy_only"
   | "unclear"
   | "unknown";
@@ -13,7 +14,7 @@ export type RoutingDecision = "workflow" | "no_workflow" | "handoff" | "clarify"
 export interface RouteConfigEntry {
   intent: UnderstoodIntent;
   decision: RoutingDecision;
-  workflowName?: "diagnose_connectivity" | "check_outage_status" | "reschedule_technician";
+  workflowName?: "diagnose_connectivity" | "check_outage_status" | "fetch_notifications" | "reschedule_technician";
   reason: string;
 }
 
@@ -23,6 +24,7 @@ export const INTENT_ROUTING_TABLE: RouteConfigEntry[] = [
   { intent: "outage_check", decision: "workflow", workflowName: "check_outage_status", reason: "Outage request must run outage lookup." },
   { intent: "reschedule_visit", decision: "workflow", workflowName: "reschedule_technician", reason: "Appointment reschedule requires technician scheduling workflow." },
   { intent: "talk_to_human", decision: "handoff", reason: "User explicitly requested a human agent." },
+  { intent: "announcement_check", decision: "workflow", workflowName: "fetch_notifications", reason: "Announcements request should query notification feed." },
   { intent: "empathy_only", decision: "no_workflow", reason: "User expressed emotion without operational request." }
 ];
 
@@ -32,7 +34,8 @@ export const ROUTING_CONFIG: Record<UnderstoodIntent, RouteConfigEntry> = {
   outage_check: INTENT_ROUTING_TABLE[2],
   reschedule_visit: INTENT_ROUTING_TABLE[3],
   talk_to_human: INTENT_ROUTING_TABLE[4],
-  empathy_only: INTENT_ROUTING_TABLE[5],
+  announcement_check: INTENT_ROUTING_TABLE[5],
+  empathy_only: INTENT_ROUTING_TABLE[6],
   unclear: { intent: "unclear", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." },
   unknown: { intent: "unclear", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." }
 };

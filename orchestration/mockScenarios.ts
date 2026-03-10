@@ -13,16 +13,25 @@ export interface ScenarioSignals {
   sttFailureHint: boolean;
 }
 
+function extractServiceOrRegion(text: string): string | undefined {
+  if (text.includes("core internet")) return "Core Internet";
+  if (text.includes("downtown")) return "Downtown";
+  if (text.includes("mobile")) return "Mobile";
+  return undefined;
+}
+
 export function parseScenarioSignals(utterance: string): ScenarioSignals {
   const text = utterance.toLowerCase();
   const explicitHumanRequest = text.includes("talk to a human") || text.includes("speak to a human") || text.includes("human");
   const discomfortDetected = text.includes("sick") || text.includes("not feeling well") || text.includes("unwell");
   const frustration = text.includes("frustrating") || text.includes("upset") || text.includes("angry");
-  const outage = text.includes("outage");
+  const outage = text.includes("outage") || text.includes("down");
+  const announcements = text.includes("announcement") || text.includes("notification");
   const reschedule = text.includes("reschedule") || text.includes("technician");
   const routerIssue = text.includes("router") || text.includes("blinking red");
   const internetIssue = text.includes("internet") || text.includes("offline");
   const sttFailureHint = text.includes("[unclear]") || text.includes("mumble");
+  const service = extractServiceOrRegion(text);
 
   if (explicitHumanRequest) {
     return {
@@ -35,6 +44,21 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
       sentiment: frustration ? "negative" : "neutral",
       confidence: 0.98,
       entities: { request: "human_agent" },
+      sttFailureHint
+    };
+  }
+
+  if (announcements) {
+    return {
+      intent: "announcement_check",
+      supportIntent: true,
+      emotionOnly: false,
+      empathyNeeded: frustration,
+      discomfortDetected,
+      explicitHumanRequest,
+      sentiment: frustration ? "negative" : "neutral",
+      confidence: 0.9,
+      entities: { active: "true", ...(service ? { serviceNameOrRegion: service } : {}) },
       sttFailureHint
     };
   }
@@ -64,7 +88,7 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
       explicitHumanRequest,
       sentiment: frustration ? "negative" : "neutral",
       confidence: 0.9,
-      entities: { issueType: "connectivity", check: "outage" },
+      entities: { issueType: "connectivity", check: "outage", ...(service ? { serviceNameOrRegion: service } : {}) },
       sttFailureHint
     };
   }
@@ -94,7 +118,7 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
       explicitHumanRequest,
       sentiment: frustration ? "negative" : "neutral",
       confidence: 0.85,
-      entities: { issueType: "connectivity", symptom: "internet_down" },
+      entities: { issueType: "connectivity", symptom: "internet_down", ...(service ? { serviceNameOrDevice: service } : {}) },
       sttFailureHint
     };
   }
