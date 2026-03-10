@@ -7,6 +7,9 @@ const GUARDRAIL_NOTE = "Unsupported facts must not be invented. Use only structu
 
 function mockFromContext(context: ResponseGenerationContext) {
   if (context.workflowPath === "clarify") return context.clarificationState;
+  if (context.pendingWorkflowState?.includes("missing slots:")) {
+    return context.clarificationState;
+  }
   if (context.workflowPath === "handoff" || context.handoffState.startsWith("Handoff required")) {
     return "I’m transferring you to a specialist now and sharing your case details so you won’t need to repeat yourself.";
   }

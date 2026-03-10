@@ -18,23 +18,24 @@ function toToolName(workflowName?: string): ToolName {
 
 function buildRequest(state: SessionState, toolName: ToolName): ToolRequestByName[ToolName] {
   const entities = state.understanding?.entities ?? {};
+  const slots = state.conversation?.slots ?? {};
 
   if (toolName === "diagnose_connectivity") {
     return {
-      account_id: entities.accountId,
-      symptom: entities.symptom ?? state.utterance
+      account_id: entities.accountId ?? slots.accountId,
+      symptom: entities.symptom ?? slots.symptom ?? state.utterance
     };
   }
 
   if (toolName === "check_outage_status") {
     return {
-      postcode: entities.postcode ?? entities.zip ?? "UNKNOWN"
+      postcode: entities.postcode ?? entities.zip ?? slots.postcode ?? ""
     };
   }
 
   if (toolName === "reschedule_technician") {
     return {
-      date: entities.date ?? entities.appointment_date ?? "today"
+      date: entities.date ?? entities.appointment_date ?? slots.date ?? ""
     };
   }
 

@@ -7,6 +7,8 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
       : `Tool ${state.toolResult.toolName} succeeded: ${JSON.stringify(state.toolResult.result ?? {})}`
     : "No workflow action executed.";
 
+  const pending = state.conversation?.pendingWorkflow;
+
   return {
     originalUtterance: state.utterance,
     sentiment: state.understanding?.sentiment,
@@ -20,6 +22,9 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
       state.routing?.decision === "clarify"
         ? state.routing?.clarificationPrompt ?? "Clarification required."
         : "No clarification required.",
+    pendingWorkflowState: pending
+      ? `Pending workflow ${pending.workflowName}; missing slots: ${pending.missingSlots.join(", ") || "none"}; collected: ${JSON.stringify(pending.collectedSlots)}`
+      : "No pending workflow.",
     policyInstructions:
       "Keep one main message, remain calm/helpful/empathetic, stay grounded to provided context only, and do not invent unsupported facts."
   };

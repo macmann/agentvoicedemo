@@ -1,6 +1,7 @@
 import { getTranscript } from "@/audio/sttAdapter";
 import { getSpeechSynthesis, playSynthesizedAudio } from "@/audio/ttsAdapter";
 import { getGeneratedResponse } from "@/llm-adapters/responseAdapter";
+import { deriveConversationState } from "@/orchestration/conversationState";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
 import { runToolExecution } from "@/tools/toolRunner";
@@ -53,13 +54,15 @@ export interface RunTesterTurnOutput {
 }
 
 export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTesterTurnOutput> {
+  const createdAt = nowIso();
   const startTime = Date.now();
   let state: SessionState = {
     utterance: input.utterance,
     sttInputMode: input.inputSource,
     sttCapture: input.sttCapture,
     sttStreamingSimulated: true,
-    policy: input.previousSession?.policy
+    policy: input.previousSession?.policy,
+    conversation: input.previousSession?.conversation
   };
 
   const sttStart = Date.now();
@@ -74,7 +77,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       session: { ...state, responseText: message, latency: { sttMs, totalMs: sttMs } },
       responseText: message,
       transcriptText,
-      createdAt: nowIso(),
+      createdAt,
       fallbackInfo: stt.reason,
       errorInfo: stt.failureType,
       metadata: {
@@ -96,8 +99,39 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     policy: evaluated.policy
   };
 
-  const routing = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
-  state = { ...state, routing };
+  const initialRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
+  const conversation = deriveConversationState({
+    previous: input.previousSession?.conversation,
+    utterance: transcriptText,
+    createdAt,
+    workflowName: initialRouting.workflowName
+  });
+
+  let routing = initialRouting;
+  const pending = conversation.pendingWorkflow;
+
+  if (pending?.workflowName) {
+    if (pending.missingSlots.length > 0) {
+      routing = {
+        decision: "clarify",
+        workflowName: pending.workflowName,
+        selectedRule: "slot_fill_required_before_workflow",
+        whyChosen: `Pending workflow requires missing slots: ${pending.missingSlots.join(", ")}`,
+        clarificationPrompt: pending.clarificationPrompt,
+        clarificationReason: "missing_required_slot"
+      };
+    } else {
+      routing = {
+        ...routing,
+        decision: "workflow",
+        workflowName: pending.workflowName,
+        selectedRule: "pending_workflow_continuation",
+        whyChosen: "Previously pending workflow now has required slots and can continue."
+      };
+    }
+  }
+
+  state = { ...state, routing, conversation };
 
   const toolStart = Date.now();
   if (routing.decision === "workflow") {
@@ -115,6 +149,16 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       },
       toolResult
     };
+
+    if (state.conversation?.pendingWorkflow) {
+      state = {
+        ...state,
+        conversation: {
+          ...state.conversation,
+          pendingWorkflow: undefined
+        }
+      };
+    }
   }
   const toolMs = Date.now() - toolStart;
 
@@ -128,16 +172,23 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const responseGeneration = await getGeneratedResponse(buildResponseContext(state));
   const responseMs = Date.now() - responseStart;
 
-  const handoffReason = state.handoff?.reason ?? state.routing?.handoffReason;
-  const handoffText = handoffReason
-    ? `I’m transferring you to a human specialist now. Reason: ${handoffReason.replaceAll("_", " ")}.`
-    : "I’m transferring you to a human specialist now with your conversation summary.";
-  const responseText = state.handoff?.triggered ? handoffText : responseGeneration.finalResponseText;
+  const responseText = state.handoff?.triggered
+    ? `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
+    : state.routing?.decision === "clarify" && state.routing.clarificationPrompt
+      ? state.routing.clarificationPrompt
+      : responseGeneration.finalResponseText;
 
   state = {
     ...state,
     responseGeneration,
     responseText,
+    conversation: {
+      ...(state.conversation ?? conversation),
+      history: [
+        ...((state.conversation ?? conversation).history ?? []),
+        { role: "assistant" as const, text: responseText, createdAt }
+      ].slice(-12)
+    },
     latency: {
       sttMs,
       understandingMs,
@@ -188,7 +239,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     session: state,
     responseText,
     transcriptText,
-    createdAt: nowIso(),
+    createdAt,
     fallbackInfo,
     errorInfo,
     metadata: {
@@ -202,6 +253,9 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       handoffReason: state.handoff?.reason,
       handoffSummary: state.handoff?.summary,
       providerMode: providerMode(state),
+      pendingWorkflow: state.conversation?.pendingWorkflow?.workflowName,
+      missingSlots: state.conversation?.pendingWorkflow?.missingSlots,
+      collectedSlots: state.conversation?.slots,
       latency: state.latency ?? {}
     }
   };

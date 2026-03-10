@@ -76,7 +76,23 @@ export interface ResponseGenerationContext {
   workflowResult: string;
   handoffState: string;
   clarificationState: string;
+  pendingWorkflowState?: string;
   policyInstructions: string;
+}
+
+export interface PendingWorkflowState {
+  workflowName: "diagnose_connectivity" | "check_outage_status" | "reschedule_technician" | "create_support_ticket";
+  requiredSlots: string[];
+  missingSlots: string[];
+  collectedSlots: Record<string, string>;
+  clarificationPrompt?: string;
+}
+
+export interface ConversationState {
+  turnIndex: number;
+  slots: Record<string, string>;
+  pendingWorkflow?: PendingWorkflowState;
+  history: Array<{ role: "user" | "assistant" | "system"; text: string; createdAt: string }>;
 }
 
 export interface ResponseGenerationDiagnostics {
@@ -133,6 +149,7 @@ export interface SessionState {
   sttStreamingSimulated?: boolean;
   stt?: SttDiagnostics;
   transcript?: string;
+  conversation?: ConversationState;
   understanding?: StructuredUnderstandingResult;
   understandingProviderResult?: {
     understanding: StructuredUnderstandingResult;

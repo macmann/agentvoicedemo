@@ -74,6 +74,32 @@ Supported tools:
 Switching mock vs API mode is done in demo controls and requires no orchestration rewrite.
 
 
+
+## Multi-turn state + slot filling
+
+The tester/orchestrator now keeps explicit conversation state across turns:
+
+- running turn history (`session.conversation.history`)
+- durable slot memory (`session.conversation.slots`)
+- pending workflow continuation (`session.conversation.pendingWorkflow`)
+
+If a routed workflow is missing required parameters (for example `postcode` for outage checks), the deterministic policy stays inspectable and moves into `clarify` with a concrete slot prompt. The next turn can fill the missing slot and automatically continue the pending workflow without rewriting the existing architecture.
+
+## OSS Support Portal API-backed tools
+
+API mode can now call real portal-backed endpoints through app routes:
+
+- `POST /api/tools/outage-check` → OSS `/v1/outages/check`
+- `POST /api/tools/diagnose-connectivity` → OSS `/v1/connectivity/diagnose`
+- `GET /api/tools/service-status` → OSS `/v1/status`
+
+Set these optional env vars to enable live calls:
+
+```bash
+OSS_SUPPORT_PORTAL_BASE_URL=https://api.oss-support-portal.example.com
+OSS_SUPPORT_PORTAL_API_KEY=...
+```
+
 ## MVP polish additions (UX + inspectability)
 
 This pass improves demo-readiness without changing simulator core behavior:

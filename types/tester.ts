@@ -16,6 +16,9 @@ export interface TesterDebugState {
   handoffReason?: string;
   handoffSummary?: string;
   providerMode: "mock" | "live" | "mixed";
+  pendingWorkflow?: string;
+  missingSlots?: string[];
+  collectedSlots?: Record<string, string>;
   latency: {
     sttMs?: number;
     understandingMs?: number;
