@@ -81,7 +81,7 @@ export function VoiceTesterPage() {
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {empty && (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-              Try: “My internet is down.”, “Can you check if there’s an outage in my area?”, or “I want to speak to a human.”
+              Try: “Is there any outage in my area?”, “Core Internet”, “Any announcements today?”, or “I want to speak to a human.”
             </div>
           )}
           {conversation.messages.map((message) => (
@@ -154,6 +154,8 @@ export function VoiceTesterPage() {
             <div><strong>Handoff reason:</strong> {latestTurn?.metadata.handoffReason ?? "-"}</div>
             <div><strong>Handoff summary:</strong> {latestTurn?.metadata.handoffSummary ?? "-"}</div>
             <div><strong>Provider mode:</strong> {latestTurn?.metadata.providerMode ?? "mock"}</div>
+            <div><strong>Tool execution mode:</strong> {latestTurn?.metadata.toolExecutionMode ?? "-"}</div>
+            <div><strong>Current conversation status:</strong> {latestTurn?.session.conversation?.currentStatus ?? "-"}</div>
             <div><strong>Dialogue state:</strong> {latestTurn?.metadata.dialogueState ?? "-"}</div>
             <div><strong>Pending workflow:</strong> {latestTurn?.metadata.pendingWorkflow ?? "-"}</div>
             <div><strong>Pending status:</strong> {latestTurn?.metadata.pendingWorkflowStatus ?? "-"}</div>

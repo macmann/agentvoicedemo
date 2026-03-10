@@ -4,6 +4,8 @@ import { PendingWorkflowState, SessionState } from "@/types/session";
 const REGION_OR_SERVICE_HINTS = ["internet", "mobile", "fiber", "core", "downtown", "uptown", "east", "west", "north", "south", "region"];
 const POSTCODE_REGEX = /\b([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{5})\b/i;
 const ISO_DATE_REGEX = /\b(\d{4}-\d{2}-\d{2})\b/;
+const AMBIGUOUS_SLOT_ANSWERS = ["not sure", "whatever", "anything", "idk", "don't know", "frustrating", "this is frustrating"];
+
 
 function toKnownWorkflowName(name?: string): PendingWorkflowState["workflowName"] | undefined {
   if (name === "diagnose_connectivity") return name;
@@ -27,11 +29,13 @@ export function extractConversationSlots(utterance: string, pendingSlot?: string
   if (lowered.includes("today")) slots.date = "today";
   if (lowered.includes("tomorrow")) slots.date = "tomorrow";
 
-  if (pendingSlot === "serviceNameOrRegion" && lowered.length <= 40) {
+  const isAmbiguousPendingAnswer = AMBIGUOUS_SLOT_ANSWERS.some((phrase) => lowered.includes(phrase));
+
+  if (pendingSlot === "serviceNameOrRegion" && lowered.length <= 40 && !isAmbiguousPendingAnswer) {
     slots.serviceNameOrRegion = utterance.trim();
   }
 
-  if (REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token))) {
+  if (!isAmbiguousPendingAnswer && REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token))) {
     slots.serviceNameOrRegion = utterance.trim();
     slots.serviceNameOrDevice = utterance.trim();
   }
@@ -48,13 +52,14 @@ export function deriveConversationState(input: {
   previous?: SessionState["conversation"];
   utterance: string;
   createdAt: string;
-  workflowName?: string;
+  workflowName?: string | null;
   intent?: string;
   handoff?: SessionState["handoff"];
   toolResult?: SessionState["toolResult"];
   dialogueState?: SessionState["routing"] extends { dialogueState?: infer T } ? T : string;
 }): NonNullable<SessionState["conversation"]> {
-  const activeWorkflow = toKnownWorkflowName(input.workflowName ?? input.previous?.pendingWorkflow?.workflowName);
+  const workflowHint = input.workflowName === null ? undefined : input.workflowName ?? input.previous?.pendingWorkflow?.workflowName;
+  const activeWorkflow = toKnownWorkflowName(workflowHint);
   const pendingSlot = input.previous?.pendingWorkflow?.missingSlots?.[0];
   const extracted = extractConversationSlots(input.utterance, pendingSlot);
   const collectedSlots = {

@@ -36,6 +36,39 @@ function hasStrongIntentShift(text: string): boolean {
   return lowered.includes("human") || lowered.includes("cancel") || lowered.includes("never mind") || lowered.includes("stop");
 }
 
+
+function buildGroundedToolResponse(state: SessionState): string | undefined {
+  if (state.toolResult?.status !== "success") return undefined;
+
+  if (state.toolResult.toolName === "check_outage_status") {
+    const result = (state.toolResult.result ?? {}) as {
+      matchedServiceName?: string;
+      matchedRegion?: string;
+      overallStatus?: string;
+      estimatedRecoveryText?: string;
+      clarificationNeeded?: boolean;
+    };
+
+    if (result.clarificationNeeded) {
+      return "I couldn’t confidently identify the service or region. Could you tell me the exact service name?";
+    }
+
+    const service = result.matchedServiceName ?? result.matchedRegion ?? "that service";
+    const status = (result.overallStatus ?? "UNKNOWN").replaceAll("_", " ").toLowerCase();
+    const recovery = result.estimatedRecoveryText ? ` We expect recovery in ${result.estimatedRecoveryText}.` : "";
+    return `Yes, ${service} is currently experiencing a ${status}.${recovery} Is there anything else I can help you with?`;
+  }
+
+  if (state.toolResult.toolName === "fetch_notifications") {
+    const notifications = ((state.toolResult.result as { notifications?: Array<{ title?: string; body?: string }> })?.notifications ?? []);
+    if (!notifications.length) return "I checked announcements and there are no active notices right now.";
+    const first = notifications[0];
+    return `I found an active announcement: ${first.title ?? "Service update"}. ${first.body ?? ""}`.trim();
+  }
+
+  return undefined;
+}
+
 export interface RunTesterTurnInput {
   utterance: string;
   inputSource: TesterInputSource;
@@ -87,6 +120,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       errorInfo: stt.failureType,
       metadata: {
         providerMode: providerMode(state),
+      toolExecutionMode: state.toolExecution?.executionMode,
         latency: { sttMs, totalMs: sttMs },
         routingDecision: "clarify"
       }
@@ -107,20 +141,20 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   const baseRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
   const priorPending = input.previousSession?.conversation?.pendingWorkflow;
-  const continuePending = priorPending && !hasStrongIntentShift(transcriptText);
+  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText));
 
   const conversation = deriveConversationState({
     previous: input.previousSession?.conversation,
     utterance: transcriptText,
     createdAt,
-    workflowName: continuePending ? priorPending.workflowName : baseRouting.workflowName,
+    workflowName: continuePending ? priorPending?.workflowName : baseRouting.decision === "workflow" ? baseRouting.workflowName : null,
     intent: state.understanding?.intent,
     dialogueState: "responding"
   });
 
   let routing: NonNullable<SessionState["routing"]> = { ...baseRouting, dialogueState: "responding" };
 
-  if (conversation.pendingWorkflow && continuePending) {
+  if (conversation.pendingWorkflow && (continuePending || conversation.pendingWorkflow.missingSlots.length > 0)) {
     if (conversation.pendingWorkflow.attempts >= 3 && conversation.pendingWorkflow.missingSlots.length > 0) {
       routing = {
         decision: "handoff",
@@ -201,11 +235,14 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const responseGeneration = await getGeneratedResponse(buildResponseContext(state));
   const responseMs = Date.now() - responseStart;
 
+  const groundedToolResponse = buildGroundedToolResponse(state);
   const responseText = state.handoff?.triggered
     ? `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
     : state.routing?.decision === "clarify" && state.routing.clarificationPrompt
-      ? state.routing.clarificationPrompt
-      : responseGeneration.finalResponseText;
+      ? state.understanding?.empathyNeeded
+        ? `I understand this is frustrating. ${state.routing.clarificationPrompt}`
+        : state.routing.clarificationPrompt
+      : groundedToolResponse ?? responseGeneration.finalResponseText;
 
   const assistantTurn = {
     id: `turn-${crypto.randomUUID()}`,
@@ -315,6 +352,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       handoffReason: state.handoff?.reason,
       handoffSummary: state.handoff?.summary,
       providerMode: providerMode(state),
+      toolExecutionMode: state.toolExecution?.executionMode,
       pendingWorkflow: state.conversation?.pendingWorkflow?.workflowName,
       pendingWorkflowStatus: state.conversation?.pendingWorkflow?.status,
       missingSlots: state.conversation?.pendingWorkflow?.missingSlots,

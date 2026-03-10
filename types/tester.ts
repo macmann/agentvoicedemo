@@ -17,6 +17,7 @@ export interface TesterDebugState {
   handoffReason?: string;
   handoffSummary?: string;
   providerMode: "mock" | "live" | "mixed";
+  toolExecutionMode?: "mock" | "api";
   pendingWorkflow?: string;
   pendingWorkflowStatus?: string;
   missingSlots?: string[];
