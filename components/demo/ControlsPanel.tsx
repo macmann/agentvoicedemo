@@ -1,4 +1,7 @@
+"use client";
+
 import { ToolExecutionMode } from "@/tools/toolTypes";
+import { SttInputMode } from "@/types/session";
 
 interface Props {
   utterance: string;
@@ -6,11 +9,19 @@ interface Props {
   stepMode: boolean;
   forceFallback: boolean;
   workflowMode: "auto" | "workflow" | "no_workflow";
+  sttInputMode: SttInputMode;
+  sttStreamingSimulated: boolean;
+  microphoneState: "idle" | "listening" | "recognized" | "fallback";
+  microphoneReason?: string;
   toolMode: ToolExecutionMode;
   onUtteranceChange: (value: string) => void;
   onStepModeChange: (value: boolean) => void;
   onForceFallbackChange: (value: boolean) => void;
   onWorkflowModeChange: (value: "auto" | "workflow" | "no_workflow") => void;
+  onSttInputModeChange: (value: SttInputMode) => void;
+  onSttStreamingSimulatedChange: (value: boolean) => void;
+  onStartMicrophoneCapture: () => void;
+  onStopMicrophoneCapture: () => void;
   onToolModeChange: (value: ToolExecutionMode) => void;
   onRun: () => void;
   onNext: () => void;
@@ -23,6 +34,52 @@ export function ControlsPanel(props: Props) {
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <h2 className="text-base font-semibold">Demo Controls</h2>
       <div className="mt-3 space-y-3 text-sm">
+        <label className="block">
+          <span className="mb-1 block font-medium text-slate-600">STT input mode</span>
+          <select
+            className="w-full rounded border border-slate-300 p-2"
+            value={props.sttInputMode}
+            onChange={(e) => props.onSttInputModeChange(e.target.value as SttInputMode)}
+          >
+            <option value="text">Text input</option>
+            <option value="microphone">Microphone capture</option>
+          </select>
+        </label>
+
+        {props.sttInputMode === "microphone" ? (
+          <div className="rounded border border-slate-200 p-2">
+            <div className="flex gap-2">
+              <button
+                className="rounded bg-slate-800 px-3 py-2 text-white disabled:bg-slate-300"
+                disabled={props.microphoneState === "listening"}
+                onClick={props.onStartMicrophoneCapture}
+                type="button"
+              >
+                Start recording
+              </button>
+              <button
+                className="rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100"
+                disabled={props.microphoneState !== "listening"}
+                onClick={props.onStopMicrophoneCapture}
+                type="button"
+              >
+                Stop recording
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-600">Mic status: {props.microphoneState}{props.microphoneReason ? ` (${props.microphoneReason})` : ""}</p>
+          </div>
+        ) : null}
+
+        <div className="flex items-center gap-2">
+          <input
+            id="stt-streaming"
+            type="checkbox"
+            checked={props.sttStreamingSimulated}
+            onChange={(e) => props.onSttStreamingSimulatedChange(e.target.checked)}
+          />
+          <label htmlFor="stt-streaming">Simulated streaming indicator</label>
+        </div>
+
         <label className="block">
           <span className="mb-1 block font-medium text-slate-600">Sample utterance</span>
           <select

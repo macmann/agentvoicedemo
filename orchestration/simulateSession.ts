@@ -1,4 +1,5 @@
 import { getSpeechSynthesis, playSynthesizedAudio } from "@/audio/ttsAdapter";
+import { getTranscript } from "@/audio/sttAdapter";
 import { getGeneratedResponse } from "@/llm-adapters/responseAdapter";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
@@ -31,8 +32,14 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       id: "stt",
       label: "Speech recognized",
       run: async (state) => {
+        const stt = await getTranscript(state);
         const sttMs = randomBetween(300, 700);
-        return { ...state, transcript: state.utterance, latency: { ...state.latency, sttMs } } as SessionState;
+        return {
+          ...state,
+          transcript: stt.transcript || state.utterance,
+          stt,
+          latency: { ...state.latency, sttMs }
+        } as SessionState;
       }
     },
     {
@@ -56,7 +63,10 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
             ...evaluated.policy,
             counters: {
               ...evaluated.policy.counters,
-              sttFailures: evaluated.sttFailureHint ? evaluated.policy.counters.sttFailures + 1 : evaluated.policy.counters.sttFailures,
+              sttFailures:
+                evaluated.sttFailureHint || state.stt?.fallbackOccurred
+                  ? evaluated.policy.counters.sttFailures + 1
+                  : evaluated.policy.counters.sttFailures,
               lowConfidence:
                 evaluated.understanding.intentConfidence < evaluated.policy.thresholds.minIntentConfidence
                   ? evaluated.policy.counters.lowConfidence + 1

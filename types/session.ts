@@ -9,6 +9,31 @@ export type FlowNodeId =
 
 export type NodeVisualState = "idle" | "active" | "success" | "fallback" | "failure" | "handoff";
 
+export type SttInputMode = "text" | "microphone";
+
+export type SttResultMode = "text" | "microphone" | "mock";
+
+export interface SttResultContract {
+  transcript: string;
+  confidence: number;
+  provider: string;
+  mode: SttResultMode;
+  timestamps?: Array<{ startMs: number; endMs: number; text: string }>;
+  language: string;
+  streaming: boolean;
+  status: "recognized" | "fallback";
+  fallbackOccurred: boolean;
+  failureType?: "low_confidence" | "empty_transcript" | "permission_denied" | "recording_failure";
+  fallbackBehavior: string;
+  reason?: string;
+}
+
+export interface SttDiagnostics extends SttResultContract {
+  model: string;
+  inputMode: SttInputMode;
+  rawInput: string;
+}
+
 export interface PolicyCounters {
   sttFailures: number;
   toolFailures: number;
@@ -96,6 +121,17 @@ export interface ToolExecutionView {
 
 export interface SessionState {
   utterance: string;
+  sttInputMode?: SttInputMode;
+  sttCapture?: {
+    transcript: string;
+    confidence: number;
+    status: "recognized" | "fallback";
+    reason?: string;
+    failureType?: "permission_denied" | "recording_failure" | "empty_transcript" | "low_confidence";
+    timestamps?: Array<{ startMs: number; endMs: number; text: string }>;
+  };
+  sttStreamingSimulated?: boolean;
+  stt?: SttDiagnostics;
   transcript?: string;
   understanding?: StructuredUnderstandingResult;
   understandingProviderResult?: {

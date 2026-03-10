@@ -16,8 +16,8 @@ const defaultNodeStates: Record<FlowNodeId, NodeVisualState> = {
 };
 
 export function useSessionSimulator(initialUtterance: string) {
-  const [session, setSession] = useState<SessionState>({ utterance: initialUtterance });
-  const sessionRef = useRef<SessionState>({ utterance: initialUtterance });
+  const [session, setSession] = useState<SessionState>({ utterance: initialUtterance, sttInputMode: "text", sttStreamingSimulated: true });
+  const sessionRef = useRef<SessionState>({ utterance: initialUtterance, sttInputMode: "text", sttStreamingSimulated: true });
   const [nodeStates, setNodeStates] = useState(defaultNodeStates);
   const [logs, setLogs] = useState<DemoLogEvent[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -35,7 +35,11 @@ export function useSessionSimulator(initialUtterance: string) {
   };
 
   const reset = (utterance: string) => {
-    const resetSession = { utterance };
+    const resetSession = {
+      utterance,
+      sttInputMode: sessionRef.current.sttInputMode ?? "text",
+      sttStreamingSimulated: sessionRef.current.sttStreamingSimulated ?? true
+    };
     sessionRef.current = resetSession;
     setSessionState(resetSession);
     setNodeStates(defaultNodeStates);

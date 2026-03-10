@@ -55,6 +55,15 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
 
 
           <div className="rounded border border-slate-200 p-2">
+            <p className="font-medium">STT diagnostics</p>
+            <p className="text-slate-600">Mode: {session.stt?.inputMode ?? session.sttInputMode ?? "—"}</p>
+            <p className="text-slate-600">Provider: {session.stt?.provider ?? "—"}</p>
+            <p className="text-slate-600">Status: {session.stt?.status ?? "—"}</p>
+            <p className="text-slate-600">Failure type: {session.stt?.failureType ?? "—"}</p>
+            <p className="text-slate-600">Reason: {session.stt?.reason ?? "—"}</p>
+          </div>
+
+          <div className="rounded border border-slate-200 p-2">
             <p className="font-medium">Tool execution</p>
             <p className="text-slate-600">Tool: {session.toolExecution?.selectedTool ?? "—"}</p>
             <p className="text-slate-600">Mode: {session.toolExecution?.executionMode ?? "—"}</p>
