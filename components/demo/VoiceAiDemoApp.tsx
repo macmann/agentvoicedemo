@@ -6,6 +6,7 @@ import { ControlsPanel } from "@/components/demo/ControlsPanel";
 import { ExecutionPanel } from "@/components/demo/ExecutionPanel";
 import { NodeDetailPanel } from "@/components/demo/NodeDetailPanel";
 import { SessionSummary } from "@/components/demo/SessionSummary";
+import { captureFromMicrophone } from "@/audio/sttAdapter";
 import { sampleUtterances } from "@/mock-data/utterances";
 import { SimulationOptions } from "@/orchestration/simulateSession";
 import { ToolExecutionMode } from "@/tools/toolTypes";
@@ -18,6 +19,8 @@ export function VoiceAiDemoApp() {
   const [forceFallback, setForceFallback] = useState(false);
   const [workflowMode, setWorkflowMode] = useState<"auto" | "workflow" | "no_workflow">("auto");
   const [toolMode, setToolMode] = useState<ToolExecutionMode>("mock");
+  const [microphoneState, setMicrophoneState] = useState<"idle" | "listening" | "recognized" | "fallback">("idle");
+  const [microphoneReason, setMicrophoneReason] = useState<string>();
   const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, runAll, reset, setSession, traversedEdges } = useSessionSimulator(sampleUtterances[0]);
 
   const options: SimulationOptions = { forceFallback, workflowMode, toolMode };
@@ -37,6 +40,23 @@ export function VoiceAiDemoApp() {
     setSession((prev) => ({ ...prev, utterance }));
   };
 
+  const handleCaptureMicrophone = async () => {
+    setMicrophoneState("listening");
+    const result = await captureFromMicrophone();
+    setMicrophoneState(result.status);
+    setMicrophoneReason(result.reason);
+    if (result.transcript) {
+      setSession((prev) => ({
+        ...prev,
+        utterance: result.transcript,
+        sttCapture: result
+      }));
+      return;
+    }
+
+    setSession((prev) => ({ ...prev, sttCapture: result }));
+  };
+
   return (
     <main className="space-y-4">
       <header>
@@ -54,15 +74,24 @@ export function VoiceAiDemoApp() {
             stepMode={stepMode}
             forceFallback={forceFallback}
             workflowMode={workflowMode}
+            sttInputMode={session.sttInputMode ?? "text"}
+            microphoneState={microphoneState}
+            microphoneReason={microphoneReason}
             onUtteranceChange={handleUtterance}
             onStepModeChange={setStepMode}
             onForceFallbackChange={setForceFallback}
             onWorkflowModeChange={setWorkflowMode}
+            onSttInputModeChange={(value) => setSession((prev) => ({ ...prev, sttInputMode: value }))}
+            onCaptureMicrophone={handleCaptureMicrophone}
             toolMode={toolMode}
             onToolModeChange={setToolMode}
             onRun={handleRun}
             onNext={handleNext}
-            onReset={() => reset(session.utterance)}
+            onReset={() => {
+              setMicrophoneState("idle");
+              setMicrophoneReason(undefined);
+              reset(session.utterance);
+            }}
             nextDisabled={stepIndex >= totalSteps}
           />
           <SessionSummary session={session} />

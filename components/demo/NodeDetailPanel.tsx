@@ -4,6 +4,7 @@ import { FlowNodeId, SessionState } from "@/types/session";
 export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; session: SessionState }) {
   const node = nodeCatalog.find((item) => item.id === nodeId) ?? nodeCatalog[0];
   const isDecisionNode = nodeId === "decision";
+  const isSttNode = nodeId === "stt";
   const isUnderstandingNode = nodeId === "understanding";
   const isToolNode = nodeId === "toolExecution";
   const isResponseNode = nodeId === "responseGeneration";
@@ -43,6 +44,43 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
           <dt className="font-medium text-slate-500">Fallback Behavior</dt>
           <dd>{node.fallbackBehavior}</dd>
         </div>
+
+        {isSttNode ? (
+          <>
+            <div>
+              <dt className="font-medium text-slate-500">Input mode</dt>
+              <dd>{session.stt?.inputMode ?? session.sttInputMode ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Provider</dt>
+              <dd>{session.stt?.provider ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Model</dt>
+              <dd>{session.stt?.model ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Recognition status</dt>
+              <dd>{session.stt?.status ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Confidence</dt>
+              <dd>{session.stt?.confidence ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Transcript output</dt>
+              <dd>{session.stt?.transcript ?? session.transcript ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Fallback reason</dt>
+              <dd>{session.stt?.reason ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Fallback behavior</dt>
+              <dd>{session.stt?.fallbackBehavior ?? "—"}</dd>
+            </div>
+          </>
+        ) : null}
 
 
         {isUnderstandingNode ? (

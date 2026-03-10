@@ -32,6 +32,14 @@ export function SessionSummary({ session }: { session: SessionState }) {
           <p className="font-medium">{session.transcript ?? "—"}</p>
         </div>
         <div>
+          <p className="text-slate-500">STT mode / provider</p>
+          <p className="font-medium">{session.stt?.inputMode ?? session.sttInputMode ?? "—"} / {session.stt?.provider ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">STT status / confidence</p>
+          <p className="font-medium">{session.stt?.status ?? "—"} / {session.stt ? session.stt.confidence.toFixed(2) : "—"}</p>
+        </div>
+        <div>
           <p className="text-slate-500">Intent</p>
           <p className="font-medium">{session.understanding?.intent ?? "—"}</p>
         </div>

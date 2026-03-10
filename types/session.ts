@@ -9,6 +9,20 @@ export type FlowNodeId =
 
 export type NodeVisualState = "idle" | "active" | "success" | "fallback" | "failure" | "handoff";
 
+export type SttInputMode = "text" | "microphone";
+
+export interface SttDiagnostics {
+  provider: "browser_text" | "browser_speech_recognition" | "openai";
+  model: string;
+  inputMode: SttInputMode;
+  transcript: string;
+  confidence: number;
+  status: "recognized" | "fallback";
+  rawInput: string;
+  fallbackBehavior: string;
+  reason?: string;
+}
+
 export interface PolicyCounters {
   sttFailures: number;
   toolFailures: number;
@@ -96,6 +110,14 @@ export interface ToolExecutionView {
 
 export interface SessionState {
   utterance: string;
+  sttInputMode?: SttInputMode;
+  sttCapture?: {
+    transcript: string;
+    confidence: number;
+    status: "recognized" | "fallback";
+    reason?: string;
+  };
+  stt?: SttDiagnostics;
   transcript?: string;
   understanding?: StructuredUnderstandingResult;
   understandingProviderResult?: {
