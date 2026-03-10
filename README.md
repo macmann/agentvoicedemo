@@ -17,7 +17,12 @@ The understanding node supports **live structured interpretation** with graceful
 
 ### Environment variables
 
-Create a `.env.local` file:
+Copy `.env.example` to `.env.local` (or create `.env.local`) and fill in values:
+
+```bash
+cp .env.example .env.local
+```
+
 
 ```bash
 # Optional: enables live understanding
