@@ -25,6 +25,26 @@ export function SessionSummary({ session }: { session: SessionState }) {
             {session.understanding?.empathyNeeded ? " (empathy cue)" : ""}
           </p>
         </div>
+        <div>
+          <p className="text-slate-500">Policy empathy_needed</p>
+          <p className="font-medium">{session.understanding?.empathyNeeded ? "true" : "false"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Policy workflow_required</p>
+          <p className="font-medium">{session.understanding?.workflowRequired ? "true" : "false"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Selected workflow</p>
+          <p className="font-medium">{session.routing?.workflowName ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Handoff reason</p>
+          <p className="font-medium">{session.routing?.handoffReason ?? session.handoff?.reason ?? "—"}</p>
+        </div>
+        <div className="col-span-2">
+          <p className="text-slate-500">Clarification reason</p>
+          <p className="font-medium">{session.routing?.clarificationReason ?? "—"}</p>
+        </div>
         <div className="col-span-2">
           <p className="text-slate-500">Entities</p>
           <p className="font-medium break-all">{session.understanding ? JSON.stringify(session.understanding.entities) : "—"}</p>

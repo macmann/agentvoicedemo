@@ -51,6 +51,21 @@ export function useSessionSimulator(initialUtterance: string) {
       return;
     }
 
+    if (step.id === "toolExecution" && session.routing?.decision === "clarify") {
+      setNodeStates((prev) => ({ ...prev, decision: "fallback", toolExecution: "idle" }));
+      setLogs((logPrev) => [
+        {
+          id: `${Date.now()}-clarify-stop`,
+          stage: "Routing clarify stop",
+          message: `Stopped before tool execution: ${session.routing?.clarificationReason ?? "clarification requested"}`,
+          timestamp: new Date().toLocaleTimeString()
+        },
+        ...logPrev
+      ]);
+      setRunning(false);
+      return;
+    }
+
     setRunning(true);
     setNodeStates((prev) => ({ ...prev, [step.id]: "active" }));
 
@@ -84,7 +99,10 @@ export function useSessionSimulator(initialUtterance: string) {
         {
           id: `${Date.now()}-${step.id}`,
           stage: step.label,
-          message: `${step.id} completed`,
+          message:
+            step.id === "decision" && next.routing?.decision === "clarify"
+              ? `decision completed: clarify (${next.routing.clarificationReason})`
+              : `${step.id} completed`,
           timestamp: new Date().toLocaleTimeString()
         },
         ...logPrev
