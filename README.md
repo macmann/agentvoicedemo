@@ -67,3 +67,43 @@ Supported tools:
 - `create_support_ticket(summary)`
 
 Switching mock vs API mode is done in demo controls and requires no orchestration rewrite.
+
+
+## MVP polish additions (UX + inspectability)
+
+This pass improves demo-readiness without changing simulator core behavior:
+
+- Clearer controls copy and run-button wording in full-run vs step mode.
+- Keyboard shortcuts for presenter speed:
+  - `Ctrl/Cmd + Enter`: run simulation
+  - `N`: next step (only in step mode)
+- Lightweight progress indicator in header (`currentStep/totalSteps`).
+- Copyable **inspection JSON** from the Execution panel (`session` + `logs` snapshot).
+- Readable structured diagnostics (pretty-printed payloads in node details).
+
+## Demo flow checklist
+
+Use this sequence for reliable stakeholder walkthroughs:
+
+1. Start with default sample utterance and `Run full simulation`.
+2. Open **Execution Log & Latency Timeline** and copy inspection JSON.
+3. Click each node to inspect inputs/outputs and fallback behavior.
+4. Enable **Step-through mode** and use `N` to show deterministic progression.
+5. Toggle fallback and workflow flags to show policy-controlled route changes.
+6. Switch tool mode between mock/API stub to demonstrate adapter boundaries.
+7. Replay synthesized audio from Session Summary.
+
+## Verification commands
+
+```bash
+npm run lint
+npm run build
+```
+
+If both pass, the MVP is ready for demo packaging and handoff.
+
+## Demo documentation
+
+- `README.md`: architecture and setup overview
+- `DEMO_GUIDE.md`: presenter walkthrough and edge-case scripts
+- `MVP_CHECKLIST.md`: final pre-demo verification checklist
