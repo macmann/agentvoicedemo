@@ -101,3 +101,9 @@ npm run build
 ```
 
 If both pass, the MVP is ready for demo packaging and handoff.
+
+## Demo documentation
+
+- `README.md`: architecture and setup overview
+- `DEMO_GUIDE.md`: presenter walkthrough and edge-case scripts
+- `MVP_CHECKLIST.md`: final pre-demo verification checklist
