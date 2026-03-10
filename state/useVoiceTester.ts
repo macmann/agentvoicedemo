@@ -51,6 +51,7 @@ export function useVoiceTester() {
     });
 
     try {
+      let announcedToolStage = false;
       const output = await runTesterTurn({
         utterance: text,
         inputSource: source,
@@ -60,7 +61,20 @@ export function useVoiceTester() {
         toolMode: "mock",
         forceFallback: false,
         voiceModeEnabled,
-        onStage: (stage) => setStatus(stage)
+        onStage: (stage) => {
+          setStatus(stage);
+          if (stage === "tool" && !announcedToolStage) {
+            announcedToolStage = true;
+            appendMessage({
+              id: id("msg"),
+              role: "system",
+              text: "I’m checking that now, please hold on.",
+              createdAt: new Date().toISOString(),
+              turnId: userTurnId,
+              status: "tool"
+            });
+          }
+        }
       });
 
       const turn: TesterTurnRecord = {

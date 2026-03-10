@@ -44,7 +44,7 @@ export function runPolicyEngine(
     fallbackSignals.explicitHumanRequest;
 
   const empathyNeeded = providerResult?.understanding.empathyNeeded ?? fallbackSignals.empathyNeeded;
-  const supportIntent = ["report_internet_issue", "report_router_issue", "outage_check", "reschedule_visit", "talk_to_human"].includes(inferredIntent);
+  const supportIntent = ["report_internet_issue", "report_router_issue", "outage_check", "reschedule_visit", "announcement_check", "talk_to_human"].includes(inferredIntent);
   const emotionOnly = inferredIntent === "empathy_only";
 
   if (explicitHumanRequest) {

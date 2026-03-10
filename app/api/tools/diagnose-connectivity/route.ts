@@ -7,6 +7,7 @@ export async function POST(req: Request) {
   try {
     const payload = await callSupportPortal<{ diagnosis: "router_unstable" | "line_signal_issue" | "no_fault_detected"; recommendation: string }>({
       endpoint: "/v1/connectivity/diagnose",
+      method: "POST",
       payload: {
         account_id: body.request?.account_id,
         symptom: body.request?.symptom

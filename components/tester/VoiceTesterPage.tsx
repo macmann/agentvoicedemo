@@ -54,7 +54,7 @@ export function VoiceTesterPage() {
   const statusText = useMemo(() => {
     if (status === "listening") return "Listening for your voice...";
     if (status === "thinking") return "Understanding and routing your request...";
-    if (status === "tool") return "Calling mocked backend tools...";
+    if (status === "tool") return "Checking service tools now...";
     if (status === "speaking") return "Assistant is responding...";
     if (status === "error") return "A fallback path was used.";
     return "Ready";
@@ -154,6 +154,11 @@ export function VoiceTesterPage() {
             <div><strong>Handoff reason:</strong> {latestTurn?.metadata.handoffReason ?? "-"}</div>
             <div><strong>Handoff summary:</strong> {latestTurn?.metadata.handoffSummary ?? "-"}</div>
             <div><strong>Provider mode:</strong> {latestTurn?.metadata.providerMode ?? "mock"}</div>
+            <div><strong>Dialogue state:</strong> {latestTurn?.metadata.dialogueState ?? "-"}</div>
+            <div><strong>Pending workflow:</strong> {latestTurn?.metadata.pendingWorkflow ?? "-"}</div>
+            <div><strong>Pending status:</strong> {latestTurn?.metadata.pendingWorkflowStatus ?? "-"}</div>
+            <div><strong>Missing slots:</strong> {JSON.stringify(latestTurn?.metadata.missingSlots ?? [], null, 2)}</div>
+            <div><strong>Collected slots:</strong> {JSON.stringify(latestTurn?.metadata.collectedSlots ?? {}, null, 2)}</div>
             <div><strong>Latency:</strong> {JSON.stringify(latestTurn?.metadata.latency ?? {}, null, 2)}</div>
           </div>
         )}

@@ -100,6 +100,27 @@ OSS_SUPPORT_PORTAL_BASE_URL=https://api.oss-support-portal.example.com
 OSS_SUPPORT_PORTAL_API_KEY=...
 ```
 
+
+Additional API-backed tools now include:
+
+- `fetch_service_status(active?)`
+- `fetch_notifications(active?, from?, to?)`
+- `check_outage_status(serviceNameOrRegion?)` (aggregates service-status + notifications)
+
+### OSS Support Portal configuration
+
+```bash
+OSS_PORTAL_BASE_URL=https://status.oss-portal.example.com
+OSS_PORTAL_API_KEY=...
+```
+
+`check_outage_status` in API mode queries:
+
+- `GET /api/service-status?active=true|false`
+- `GET /api/notifications?active=true|false&from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+The tool normalizes both feeds into one inspectable outage result payload for response generation.
+
 ## MVP polish additions (UX + inspectability)
 
 This pass improves demo-readiness without changing simulator core behavior:

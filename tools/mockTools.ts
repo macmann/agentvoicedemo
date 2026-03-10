@@ -14,6 +14,31 @@ function success<TName extends keyof ToolRequestByName>(
   };
 }
 
+export function mockFetchServiceStatus(request: ToolRequestByName["fetch_service_status"]) {
+  const services = [
+    { serviceName: "Core Internet", region: "Downtown", status: "PARTIAL_OUTAGE" as const, updatedAt: new Date().toISOString() },
+    { serviceName: "Mobile", region: "Citywide", status: "OPERATIONAL" as const, updatedAt: new Date().toISOString() }
+  ];
+
+  return success("fetch_service_status", request, { services: request.active === false ? [] : services });
+}
+
+export function mockFetchNotifications(request: ToolRequestByName["fetch_notifications"]) {
+  const notifications = [
+    {
+      title: "Core Internet Degradation in Downtown Region",
+      body: "We are investigating elevated latency for Core Internet in Downtown.",
+      serviceName: "Core Internet",
+      region: "Downtown",
+      active: true,
+      estimatedRecoveryText: "about 2 hours",
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  return success("fetch_notifications", request, { notifications: request.active === false ? [] : notifications });
+}
+
 export function mockDiagnoseConnectivity(request: ToolRequestByName["diagnose_connectivity"]) {
   const symptom = (request.symptom ?? "").toLowerCase();
 
@@ -31,19 +56,32 @@ export function mockDiagnoseConnectivity(request: ToolRequestByName["diagnose_co
 }
 
 export function mockCheckOutageStatus(request: ToolRequestByName["check_outage_status"]) {
-  const normalized = request.postcode.replace(/\s+/g, "").toUpperCase();
-  const outagePostcodes = new Set(["90210", "10001", "SW1A1AA"]);
+  const lookup = (request.serviceNameOrRegion ?? "").toLowerCase();
+  const matched = lookup.includes("core") || lookup.includes("downtown");
 
-  if (outagePostcodes.has(normalized)) {
+  if (matched) {
     return success("check_outage_status", request, {
-      outage_detected: true,
-      estimated_recovery: "2 hours",
-      incident_id: "INC-44721"
+      matchedServiceName: "Core Internet",
+      matchedRegion: "Downtown",
+      overallStatus: "PARTIAL_OUTAGE",
+      serviceStatus: "PARTIAL_OUTAGE",
+      announcementTitle: "Core Internet Degradation in Downtown Region",
+      announcementBody: "We are investigating elevated latency for Core Internet in Downtown.",
+      estimatedRecoveryText: "about 2 hours",
+      source: {
+        serviceStatusUsed: true,
+        notificationsUsed: true
+      }
     });
   }
 
   return success("check_outage_status", request, {
-    outage_detected: false
+    overallStatus: "UNKNOWN",
+    source: {
+      serviceStatusUsed: true,
+      notificationsUsed: true
+    },
+    clarificationNeeded: true
   });
 }
 

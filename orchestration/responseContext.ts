@@ -23,7 +23,7 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
         ? state.routing?.clarificationPrompt ?? "Clarification required."
         : "No clarification required.",
     pendingWorkflowState: pending
-      ? `Pending workflow ${pending.workflowName}; missing slots: ${pending.missingSlots.join(", ") || "none"}; collected: ${JSON.stringify(pending.collectedSlots)}`
+      ? `Pending workflow ${pending.workflowName} (${pending.status}); missing slots: ${pending.missingSlots.join(", ") || "none"}; collected: ${JSON.stringify(pending.collectedSlots)}`
       : "No pending workflow.",
     policyInstructions:
       "Keep one main message, remain calm/helpful/empathetic, stay grounded to provided context only, and do not invent unsupported facts."

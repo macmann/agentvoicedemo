@@ -1,8 +1,9 @@
+import { WORKFLOW_SLOT_CONFIG } from "@/orchestration/workflowSlots";
 import { PendingWorkflowState, SessionState } from "@/types/session";
 
+const REGION_OR_SERVICE_HINTS = ["internet", "mobile", "fiber", "core", "downtown", "uptown", "east", "west", "north", "south", "region"];
 const POSTCODE_REGEX = /\b([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{5})\b/i;
 const ISO_DATE_REGEX = /\b(\d{4}-\d{2}-\d{2})\b/;
-const ACCOUNT_REGEX = /\b(?:acct|account)[-_\s:]*(\w{4,})\b/i;
 
 function toKnownWorkflowName(name?: string): PendingWorkflowState["workflowName"] | undefined {
   if (name === "diagnose_connectivity") return name;
@@ -12,33 +13,35 @@ function toKnownWorkflowName(name?: string): PendingWorkflowState["workflowName"
   return undefined;
 }
 
-export function extractConversationSlots(utterance: string): Record<string, string> {
+export function extractConversationSlots(utterance: string, pendingSlot?: string): Record<string, string> {
   const slots: Record<string, string> = {};
+  const lowered = utterance.toLowerCase().trim();
   const postcode = utterance.match(POSTCODE_REGEX)?.[1];
   const isoDate = utterance.match(ISO_DATE_REGEX)?.[1];
-  const accountId = utterance.match(ACCOUNT_REGEX)?.[1];
-  const lowered = utterance.toLowerCase();
 
-  if (postcode) slots.postcode = postcode.toUpperCase().replace(/\s+/g, "");
+  if (postcode) {
+    slots.postcode = postcode.toUpperCase().replace(/\s+/g, "");
+    slots.serviceNameOrRegion = slots.postcode;
+  }
   if (isoDate) slots.date = isoDate;
   if (lowered.includes("today")) slots.date = "today";
   if (lowered.includes("tomorrow")) slots.date = "tomorrow";
-  if (accountId) slots.accountId = accountId;
-  if (lowered.includes("router") || lowered.includes("internet") || lowered.includes("offline")) slots.symptom = utterance;
+
+  if (pendingSlot === "serviceNameOrRegion" && lowered.length <= 40) {
+    slots.serviceNameOrRegion = utterance.trim();
+  }
+
+  if (REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token))) {
+    slots.serviceNameOrRegion = utterance.trim();
+    slots.serviceNameOrDevice = utterance.trim();
+  }
+
+  if (lowered.includes("router") || lowered.includes("modem") || lowered.includes("device")) {
+    slots.serviceNameOrDevice = utterance.trim();
+    slots.device = utterance.trim();
+  }
 
   return slots;
-}
-
-export function requiredSlotsForWorkflow(workflowName?: string): string[] {
-  if (workflowName === "check_outage_status") return ["postcode"];
-  if (workflowName === "reschedule_technician") return ["date"];
-  return [];
-}
-
-function clarificationPromptForSlot(slot: string): string {
-  if (slot === "postcode") return "Sure — what postcode should I use to check the outage status?";
-  if (slot === "date") return "Got it — what date would you like to move the technician visit to?";
-  return `Please provide ${slot} so I can continue.`;
 }
 
 export function deriveConversationState(input: {
@@ -46,32 +49,64 @@ export function deriveConversationState(input: {
   utterance: string;
   createdAt: string;
   workflowName?: string;
+  intent?: string;
+  handoff?: SessionState["handoff"];
+  toolResult?: SessionState["toolResult"];
+  dialogueState?: SessionState["routing"] extends { dialogueState?: infer T } ? T : string;
 }): NonNullable<SessionState["conversation"]> {
-  const extracted = extractConversationSlots(input.utterance);
-  const history = [...(input.previous?.history ?? []), { role: "user" as const, text: input.utterance, createdAt: input.createdAt }].slice(-12);
-  const slots = {
-    ...(input.previous?.slots ?? {}),
+  const activeWorkflow = toKnownWorkflowName(input.workflowName ?? input.previous?.pendingWorkflow?.workflowName);
+  const pendingSlot = input.previous?.pendingWorkflow?.missingSlots?.[0];
+  const extracted = extractConversationSlots(input.utterance, pendingSlot);
+  const collectedSlots = {
+    ...(input.previous?.collectedSlots ?? {}),
     ...extracted
   };
 
-  const activeWorkflow = toKnownWorkflowName(input.workflowName ?? input.previous?.pendingWorkflow?.workflowName);
-  const requiredSlots = requiredSlotsForWorkflow(activeWorkflow);
-  const missingSlots = requiredSlots.filter((slot) => !slots[slot]);
+  const requiredSlots = activeWorkflow ? WORKFLOW_SLOT_CONFIG[activeWorkflow].requiredSlots : [];
+  const missingSlots = requiredSlots.filter((slot) => !collectedSlots[slot]);
+  const status: PendingWorkflowState["status"] = !activeWorkflow
+    ? "cancelled"
+    : missingSlots.length > 0
+      ? "awaiting_input"
+      : "ready";
 
   const pendingWorkflow = activeWorkflow
     ? {
         workflowName: activeWorkflow,
+        status,
         requiredSlots,
         missingSlots,
-        collectedSlots: slots,
-        clarificationPrompt: missingSlots.length ? clarificationPromptForSlot(missingSlots[0]) : undefined
+        collectedSlots,
+        clarificationPrompt: missingSlots[0] ? WORKFLOW_SLOT_CONFIG[activeWorkflow].prompts[missingSlots[0]] : undefined,
+        originalIntent: input.previous?.pendingWorkflow?.originalIntent ?? input.intent,
+        attempts: (input.previous?.pendingWorkflow?.attempts ?? 0) + (missingSlots.length > 0 ? 1 : 0)
       }
     : undefined;
 
+  const turns = [
+    ...(input.previous?.turns ?? []),
+    {
+      id: `turn-${crypto.randomUUID()}`,
+      role: "user" as const,
+      text: input.utterance,
+      createdAt: input.createdAt,
+      intent: input.intent,
+      workflowName: activeWorkflow,
+      status: "final" as const
+    }
+  ].slice(-30);
+
   return {
-    turnIndex: (input.previous?.turnIndex ?? 0) + 1,
-    slots,
+    conversationId: input.previous?.conversationId ?? crypto.randomUUID(),
+    turns,
+    currentStatus: input.handoff?.triggered ? "handoff" : input.dialogueState === "awaiting_missing_info" ? "awaiting_user_input" : "processing",
+    activeIntent: input.intent,
     pendingWorkflow,
-    history
+    pendingSlots: pendingWorkflow?.missingSlots ?? [],
+    collectedSlots,
+    lastAssistantQuestion: input.previous?.lastAssistantQuestion,
+    lastToolResult: input.toolResult ?? input.previous?.lastToolResult,
+    lastHandoffState: input.handoff ?? input.previous?.lastHandoffState,
+    fallbackState: input.previous?.fallbackState
   };
 }

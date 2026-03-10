@@ -31,6 +31,11 @@ function providerMode(state: SessionState): "mock" | "live" | "mixed" {
   return "mock";
 }
 
+function hasStrongIntentShift(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return lowered.includes("human") || lowered.includes("cancel") || lowered.includes("never mind") || lowered.includes("stop");
+}
+
 export interface RunTesterTurnInput {
   utterance: string;
   inputSource: TesterInputSource;
@@ -92,6 +97,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   input.onStage?.("thinking");
   const evaluated = runDeterministicUnderstandingPolicy(transcriptText, { workflowMode: input.workflowMode }, input.previousSession?.policy?.counters);
   const understandingMs = Date.now() - understandingStart;
+
   state = {
     ...state,
     understanding: evaluated.understanding,
@@ -99,47 +105,71 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     policy: evaluated.policy
   };
 
-  const initialRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
+  const baseRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
+  const priorPending = input.previousSession?.conversation?.pendingWorkflow;
+  const continuePending = priorPending && !hasStrongIntentShift(transcriptText);
+
   const conversation = deriveConversationState({
     previous: input.previousSession?.conversation,
     utterance: transcriptText,
     createdAt,
-    workflowName: initialRouting.workflowName
+    workflowName: continuePending ? priorPending.workflowName : baseRouting.workflowName,
+    intent: state.understanding?.intent,
+    dialogueState: "responding"
   });
 
-  let routing = initialRouting;
-  const pending = conversation.pendingWorkflow;
+  let routing: NonNullable<SessionState["routing"]> = { ...baseRouting, dialogueState: "responding" };
 
-  if (pending?.workflowName) {
-    if (pending.missingSlots.length > 0) {
+  if (conversation.pendingWorkflow && continuePending) {
+    if (conversation.pendingWorkflow.attempts >= 3 && conversation.pendingWorkflow.missingSlots.length > 0) {
+      routing = {
+        decision: "handoff",
+        workflowName: conversation.pendingWorkflow.workflowName,
+        selectedRule: "pending_slot_attempts_exceeded",
+        whyChosen: "Unable to collect required slot values after repeated turns.",
+        handoffReason: "slot_filling_attempts_exceeded",
+        dialogueState: "handoff"
+      };
+    } else if (conversation.pendingWorkflow.missingSlots.length > 0) {
       routing = {
         decision: "clarify",
-        workflowName: pending.workflowName,
+        workflowName: conversation.pendingWorkflow.workflowName,
         selectedRule: "slot_fill_required_before_workflow",
-        whyChosen: `Pending workflow requires missing slots: ${pending.missingSlots.join(", ")}`,
-        clarificationPrompt: pending.clarificationPrompt,
-        clarificationReason: "missing_required_slot"
+        whyChosen: `Pending workflow requires missing slots: ${conversation.pendingWorkflow.missingSlots.join(", ")}`,
+        clarificationPrompt: conversation.pendingWorkflow.clarificationPrompt,
+        clarificationReason: "missing_required_slot",
+        dialogueState: "awaiting_missing_info"
       };
     } else {
       routing = {
-        ...routing,
         decision: "workflow",
-        workflowName: pending.workflowName,
+        workflowName: conversation.pendingWorkflow.workflowName,
         selectedRule: "pending_workflow_continuation",
-        whyChosen: "Previously pending workflow now has required slots and can continue."
+        whyChosen: "Previously pending workflow now has required slots and can continue.",
+        dialogueState: "ready_to_execute"
       };
     }
   }
 
-  state = { ...state, routing, conversation };
+  state = { ...state, conversation, routing };
 
   const toolStart = Date.now();
   if (routing.decision === "workflow") {
     input.onStage?.("tool");
+    state = { ...state, routing: { ...routing, dialogueState: "executing_tool" } };
     const { toolResult, record } = await runToolExecution(state, {
       forceFallback: input.forceFallback,
       modeOverride: input.toolMode
     });
+
+    const pendingStatus = state.conversation?.pendingWorkflow
+      ? {
+          ...state.conversation.pendingWorkflow,
+          status: "completed" as const,
+          missingSlots: []
+        }
+      : undefined;
+
     state = {
       ...state,
       toolExecution: {
@@ -147,18 +177,17 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
         requestPayload: (record.requestPayload as Record<string, unknown>) ?? {},
         responsePayload: record.responsePayload as Record<string, unknown> | undefined
       },
-      toolResult
+      toolResult,
+      routing: state.routing ? { ...state.routing, dialogueState: "responding" } : state.routing,
+      conversation: state.conversation
+        ? {
+            ...state.conversation,
+            pendingWorkflow: pendingStatus,
+            lastToolResult: toolResult.result,
+            currentStatus: "processing"
+          }
+        : state.conversation
     };
-
-    if (state.conversation?.pendingWorkflow) {
-      state = {
-        ...state,
-        conversation: {
-          ...state.conversation,
-          pendingWorkflow: undefined
-        }
-      };
-    }
   }
   const toolMs = Date.now() - toolStart;
 
@@ -178,17 +207,34 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       ? state.routing.clarificationPrompt
       : responseGeneration.finalResponseText;
 
+  const assistantTurn = {
+    id: `turn-${crypto.randomUUID()}`,
+    role: "assistant" as const,
+    text: responseText,
+    createdAt,
+    intent: state.understanding?.intent,
+    entities: state.understanding?.entities,
+    routingDecision: state.routing?.decision,
+    workflowName: state.routing?.workflowName,
+    toolName: state.toolExecution?.selectedTool,
+    toolResult: state.toolResult?.result,
+    latencyMs: Date.now() - startTime,
+    status: (state.routing?.decision === "clarify" ? "thinking" : "final") as "thinking" | "final"
+  };
+
   state = {
     ...state,
     responseGeneration,
     responseText,
-    conversation: {
-      ...(state.conversation ?? conversation),
-      history: [
-        ...((state.conversation ?? conversation).history ?? []),
-        { role: "assistant" as const, text: responseText, createdAt }
-      ].slice(-12)
-    },
+    conversation: state.conversation
+      ? {
+          ...state.conversation,
+          currentStatus: state.handoff?.triggered ? "handoff" : state.routing?.decision === "clarify" ? "awaiting_user_input" : "speaking",
+          lastAssistantQuestion: state.routing?.decision === "clarify" ? responseText : state.conversation.lastAssistantQuestion,
+          lastHandoffState: state.handoff,
+          turns: [...state.conversation.turns, assistantTurn].slice(-30)
+        }
+      : state.conversation,
     latency: {
       sttMs,
       understandingMs,
@@ -235,6 +281,22 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     fallbackInfo = stt.reason;
   }
 
+  if (fallbackInfo || errorInfo) {
+    state = {
+      ...state,
+      conversation: state.conversation
+        ? {
+            ...state.conversation,
+            fallbackState: {
+              triggered: true,
+              reason: fallbackInfo,
+              errorType: errorInfo
+            }
+          }
+        : state.conversation
+    };
+  }
+
   return {
     session: state,
     responseText,
@@ -254,8 +316,10 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       handoffSummary: state.handoff?.summary,
       providerMode: providerMode(state),
       pendingWorkflow: state.conversation?.pendingWorkflow?.workflowName,
+      pendingWorkflowStatus: state.conversation?.pendingWorkflow?.status,
       missingSlots: state.conversation?.pendingWorkflow?.missingSlots,
-      collectedSlots: state.conversation?.slots,
+      collectedSlots: state.conversation?.collectedSlots,
+      dialogueState: state.routing?.dialogueState,
       latency: state.latency ?? {}
     }
   };
