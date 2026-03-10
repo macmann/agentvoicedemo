@@ -19,6 +19,10 @@ export function SessionSummary({ session }: { session: SessionState }) {
           <p className="font-medium">{session.understanding?.intent ?? "—"}</p>
         </div>
         <div>
+          <p className="text-slate-500">Understanding mode</p>
+          <p className="font-medium">{session.understandingDiagnostics?.provider === "mock" ? "mock mode" : session.understandingDiagnostics?.provider ?? "—"}</p>
+        </div>
+        <div>
           <p className="text-slate-500">Sentiment / empathy</p>
           <p className="font-medium">
             {session.understanding?.sentiment ?? "—"}

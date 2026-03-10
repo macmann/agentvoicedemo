@@ -1,48 +1,49 @@
-<<<<<<< HEAD
-# Next.js App Router + TypeScript + Tailwind + MDX Scaffold
+# Enterprise Voice AI Support — Architecture Simulator
 
-This repository is a ready-to-push scaffold for:
-- Next.js (App Router)
-- TypeScript
-- Tailwind CSS
-- MDX-powered **Insights** section (content stored in `content/insights/*.mdx`)
+This prototype demonstrates a deterministic support orchestration pipeline with inspectable node-by-node state.
 
-## Quick start
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open:
-- Home: http://localhost:3000
-- Insights: http://localhost:3000/insights
+Open http://localhost:3000.
 
-## Add a new MDX post
+## Hybrid Understanding Layer configuration
 
-Create a file in:
+The understanding node supports **live structured interpretation** with graceful fallback to the deterministic mock provider.
 
-`content/insights/<your-slug>.mdx`
+### Environment variables
 
-Example frontmatter:
+Create a `.env.local` file:
 
-```mdx
----
-title: "My Post"
-date: "2026-01-24"
-summary: "Short summary"
-tags: ["tag1", "tag2"]
-published: true
----
+```bash
+# Optional: enables live understanding
+OPENAI_API_KEY=sk-...
+
+# Optional override; defaults to gpt-5-mini
+OPENAI_UNDERSTANDING_MODEL=gpt-5-mini
+
+# Optional override; defaults to https://api.openai.com/v1
+OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
-Then it will appear on `/insights`.
+### Mock mode (no API key)
 
-## Notes
+If `OPENAI_API_KEY` is missing or invalid, the app automatically runs in **mock mode**.
 
-- MDX rendering is handled via `next-mdx-remote/rsc` (server components-friendly).
-- Post listing and detail pages read files from disk on the server.
-=======
-# OSS
-OSS for API and System Availability with Human Triggered Announcements 
->>>>>>> 507ef8486f7be6149d8b07e521253bc138368336
+- UI remains functional.
+- Understanding node details show provider=`mock` and fallback reason.
+- Deterministic routing and policy behavior are still enforced.
+
+### Live mode
+
+With a valid API key, the understanding adapter sends a structured request to GPT-5 mini and validates/sanitizes the result before it reaches routing.
+
+If model output is malformed, the adapter falls back safely to mock/unclear behavior.
+
+## Safety note
+
+Structured model output never directly executes tools. The existing deterministic routing/policy layer remains the action gate.

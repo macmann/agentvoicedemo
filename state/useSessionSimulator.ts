@@ -2,6 +2,7 @@
 
 import { Dispatch, SetStateAction, useMemo, useRef, useState } from "react";
 import { buildSimulationSteps, SimulationOptions } from "@/orchestration/simulateSession";
+import { getUnderstandingResult } from "@/orchestration/understandingAdapter";
 import { DemoLogEvent, FlowNodeId, NodeVisualState, SessionState } from "@/types/session";
 
 const defaultNodeStates: Record<FlowNodeId, NodeVisualState> = {
@@ -80,6 +81,11 @@ export function useSessionSimulator(initialUtterance: string) {
 
     setRunning(true);
     setNodeStates((prev) => ({ ...prev, [step.id]: "active" }));
+
+    if (step.id === "understanding") {
+      const providerResult = await getUnderstandingResult(sessionRef.current.utterance);
+      setSessionState((prev) => ({ ...prev, understandingProviderResult: providerResult }));
+    }
 
     if (index > 0) {
       const prevId = steps[index - 1]?.id;

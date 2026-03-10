@@ -8,9 +8,15 @@ export type { PolicyOptions };
 export function runDeterministicUnderstandingPolicy(
   utterance: string,
   options: PolicyOptions,
-  previousCounters?: PolicyCounters
-): { understanding: NonNullable<SessionState["understanding"]>; policy: NonNullable<SessionState["policy"]>; sttFailureHint: boolean } {
-  return runPolicyEngine(utterance, options, previousCounters);
+  previousCounters?: PolicyCounters,
+  providerResult?: SessionState["understandingProviderResult"]
+): {
+  understanding: NonNullable<SessionState["understanding"]>;
+  understandingDiagnostics?: SessionState["understandingDiagnostics"];
+  policy: NonNullable<SessionState["policy"]>;
+  sttFailureHint: boolean;
+} {
+  return runPolicyEngine(utterance, options, previousCounters, providerResult);
 }
 
 export function runDeterministicRoutingPolicy(state: Pick<SessionState, "understanding" | "policy">): NonNullable<SessionState["routing"]> {
