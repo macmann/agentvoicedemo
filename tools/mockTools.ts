@@ -12,10 +12,26 @@ export function executeMockTool(state: SessionState, forceFallback: boolean) {
   }
 
   if (utterance.includes("outage") || utterance.includes("internet") || utterance.includes("router")) {
+    if (utterance.includes("router") && utterance.includes("blinking red")) {
+      return {
+        toolName: "DeviceDiagnostics",
+        status: "success" as const,
+        result: { diagnosticCode: "LOS_RED", recommendation: "power_cycle_then_check_cable", outageDetected: false }
+      };
+    }
+
+    if (utterance.includes("outage")) {
+      return {
+        toolName: "OutageLookupAPI",
+        status: "success" as const,
+        result: { outageDetected: true, eta: "2 hours", area: "ZIP 90210", incidentId: "INC-44721" }
+      };
+    }
+
     return {
       toolName: "OutageLookupAPI",
       status: "success" as const,
-      result: { outageDetected: true, eta: "2 hours", area: "ZIP 90210" }
+      result: { outageDetected: true, eta: "2 hours", area: "ZIP 90210", symptom: "internet_down" }
     };
   }
 

@@ -18,9 +18,10 @@ interface Props {
   selectedNode: FlowNodeId;
   onSelectNode: (id: FlowNodeId) => void;
   states: Record<FlowNodeId, NodeVisualState>;
+  traversedEdges: string[];
 }
 
-export function ArchitectureFlow({ selectedNode, onSelectNode, states }: Props) {
+export function ArchitectureFlow({ selectedNode, onSelectNode, states, traversedEdges }: Props) {
   return (
     <div className="h-full overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div className="relative h-[360px] min-w-[1500px]">
@@ -28,14 +29,17 @@ export function ArchitectureFlow({ selectedNode, onSelectNode, states }: Props) 
           {edges.map((edge) => {
             const from = nodePositions[edge.from];
             const to = nodePositions[edge.to];
+            const edgeId = `${edge.from}->${edge.to}`;
+            const traversed = traversedEdges.includes(edgeId);
+            const handoffPath = traversed && edge.to === "handoff";
             return (
               <line
-                key={`${edge.from}-${edge.to}`}
+                key={edgeId}
                 x1={from.x + 190}
                 y1={from.y + 35}
                 x2={to.x}
                 y2={to.y + 35}
-                stroke="#94a3b8"
+                stroke={handoffPath ? "#dc2626" : traversed ? "#4f46e5" : "#94a3b8"}
                 strokeWidth="2"
                 markerEnd="url(#arrow)"
               />

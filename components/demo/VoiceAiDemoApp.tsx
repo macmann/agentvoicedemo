@@ -16,22 +16,20 @@ export function VoiceAiDemoApp() {
   const [stepMode, setStepMode] = useState(false);
   const [forceFallback, setForceFallback] = useState(false);
   const [workflowMode, setWorkflowMode] = useState<"auto" | "workflow" | "no_workflow">("auto");
-  const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, reset, setSession } = useSessionSimulator(sampleUtterances[0]);
+  const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, runAll, reset, setSession, traversedEdges } = useSessionSimulator(sampleUtterances[0]);
 
   const options: SimulationOptions = { forceFallback, workflowMode };
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (stepMode) {
-      applyStep(stepIndex, options);
+      await applyStep(stepIndex, options);
       return;
     }
 
-    for (let i = stepIndex; i < totalSteps; i += 1) {
-      applyStep(i, options);
-    }
+    await runAll(options);
   };
 
-  const handleNext = () => applyStep(stepIndex, options);
+  const handleNext = async () => applyStep(stepIndex, options);
 
   const handleUtterance = (utterance: string) => {
     setSession((prev) => ({ ...prev, utterance }));
@@ -67,7 +65,7 @@ export function VoiceAiDemoApp() {
         </div>
 
         <div className="h-[420px]">
-          <ArchitectureFlow selectedNode={selectedNode} onSelectNode={setSelectedNode} states={nodeStates} />
+          <ArchitectureFlow selectedNode={selectedNode} onSelectNode={setSelectedNode} states={nodeStates} traversedEdges={traversedEdges} />
         </div>
 
         <NodeDetailPanel nodeId={selectedNode} />
