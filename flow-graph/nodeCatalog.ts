@@ -8,7 +8,7 @@ export const nodeCatalog: NodeDetails[] = [
     input: "Raw voice audio frames",
     output: "Transcript text + confidence",
     parameters: ["language=en-US", "partialResults=true", "noiseSuppression=medium"],
-    latencyEstimate: "120-250ms",
+    latencyEstimate: "300-700ms",
     fallbackBehavior: "Ask user to repeat and route to low-bandwidth speech profile."
   },
   {
@@ -18,7 +18,7 @@ export const nodeCatalog: NodeDetails[] = [
     input: "Transcript text",
     output: "Intent, entities, empathy/handoff flags",
     parameters: ["intentThreshold=0.78", "entityResolver=telecom-domain-v1", "sentiment=true"],
-    latencyEstimate: "90-180ms",
+    latencyEstimate: "200-600ms",
     fallbackBehavior: "Low confidence routes to clarify question or handoff recommendation."
   },
   {
@@ -38,7 +38,7 @@ export const nodeCatalog: NodeDetails[] = [
     input: "Workflow + entities",
     output: "Tool payload success/failure",
     parameters: ["retry=1", "timeoutMs=1200", "idempotencyKey=sessionId"],
-    latencyEstimate: "150-650ms",
+    latencyEstimate: "100-1200ms",
     fallbackBehavior: "Return graceful degradation response and optionally queue handoff."
   },
   {
@@ -48,7 +48,7 @@ export const nodeCatalog: NodeDetails[] = [
     input: "State snapshot + tool result",
     output: "Response text",
     parameters: ["temperature=0.4", "style=empathetic+concise", "grounding=required"],
-    latencyEstimate: "180-350ms",
+    latencyEstimate: "250-700ms",
     fallbackBehavior: "Use deterministic template when LLM unavailable."
   },
   {
@@ -58,7 +58,7 @@ export const nodeCatalog: NodeDetails[] = [
     input: "Response text",
     output: "Audio waveform/stream",
     parameters: ["voice=calm-neutral", "bargeIn=true", "chunkedStreaming=true"],
-    latencyEstimate: "100-220ms",
+    latencyEstimate: "150-400ms",
     fallbackBehavior: "Fallback to alternate voice profile or text callback channel."
   },
   {

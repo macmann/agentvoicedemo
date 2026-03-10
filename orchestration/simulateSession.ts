@@ -15,13 +15,24 @@ export interface SimulationStep {
   run: (state: SessionState) => SessionState;
 }
 
+function inferScenario(utterance: string) {
+  const text = utterance.toLowerCase();
+  if (text.includes("speak to a human") || text.includes("human")) return "human";
+  if (text.includes("sick") || text.includes("reschedule") || text.includes("technician")) return "reschedule";
+  if (text.includes("outage")) return "outage_check";
+  if (text.includes("internet is down") || text.includes("internet")) return "internet_down";
+  if (text.includes("router") && text.includes("blinking red")) return "router_red";
+  if (text.includes("frustrating")) return "frustrated";
+  return "general";
+}
+
 export function buildSimulationSteps(options: SimulationOptions): SimulationStep[] {
   return [
     {
       id: "stt",
       label: "Speech recognized",
       run: (state) => {
-        const sttMs = randomBetween(120, 240);
+        const sttMs = randomBetween(300, 700);
         return {
           ...state,
           transcript: state.utterance,
@@ -34,25 +45,36 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       label: "Intent and entities extracted",
       run: (state) => {
         const utterance = state.utterance.toLowerCase();
-        const wantsHuman = utterance.includes("human");
-        const frustrated = utterance.includes("frustrating");
+        const scenario = inferScenario(utterance);
+        const wantsHuman = scenario === "human";
+        const frustrated = scenario === "frustrated";
         const workflowRequired =
           options.workflowMode === "workflow" ||
           (options.workflowMode === "auto" && (utterance.includes("outage") || utterance.includes("reschedule")));
-        const understandingMs = randomBetween(90, 170);
+        const lowConfidence = scenario === "router_red";
+        const understandingMs = randomBetween(200, 600);
+        const entities: Record<string, string> = { issueType: "general_support" };
+        if (scenario === "reschedule") {
+          entities.issueType = "appointment";
+          entities.action = "reschedule";
+          entities.reason = "sick";
+        } else if (scenario === "outage_check" || scenario === "internet_down" || scenario === "router_red") {
+          entities.issueType = "connectivity";
+          entities.symptom = scenario === "router_red" ? "router_blinking_red" : "internet_down";
+        }
 
         return {
           ...state,
           understanding: {
-            intent: wantsHuman ? "human_handoff_request" : workflowRequired ? "service_task" : "general_support",
-            intentConfidence: wantsHuman ? 0.97 : 0.84,
-            entities: { utteranceType: workflowRequired ? "actionable" : "informational" },
+            intent: wantsHuman ? "human_handoff_request" : workflowRequired ? "service_task" : lowConfidence ? "connectivity_issue" : "general_support",
+            intentConfidence: wantsHuman ? 0.97 : lowConfidence ? 0.62 : 0.86,
+            entities,
             sentiment: frustrated ? "negative" : "neutral",
             empathyNeeded: frustrated,
             workflowRequired,
             recommendedWorkflow: workflowRequired ? "network_or_appointment_workflow" : undefined,
             handoffRecommended: wantsHuman || frustrated,
-            reason: wantsHuman ? "Explicit user request" : frustrated ? "Emotional escalation" : undefined
+            reason: wantsHuman ? "Explicit user request" : frustrated ? "Emotional escalation" : lowConfidence ? "Low confidence parse" : undefined
           },
           latency: { ...state.latency, understandingMs }
         };
@@ -64,6 +86,8 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       run: (state) => {
         const decision = state.understanding?.handoffRecommended
           ? "handoff"
+          : (state.understanding?.intentConfidence ?? 0) < 0.7
+            ? "clarify"
           : state.understanding?.workflowRequired
             ? "workflow"
             : "no_workflow";
@@ -80,7 +104,19 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       id: "toolExecution",
       label: "Tool execution completed",
       run: (state) => {
-        const toolMs = randomBetween(180, 600);
+        if (state.routing?.decision !== "workflow") {
+          return {
+            ...state,
+            toolResult: {
+              toolName: "none",
+              status: "success",
+              result: { skipped: true, reason: `routing=${state.routing?.decision}` }
+            },
+            latency: { ...state.latency, toolMs: 0 }
+          };
+        }
+
+        const toolMs = randomBetween(100, 1200);
         return {
           ...state,
           toolResult: executeMockTool(state, options.forceFallback),
@@ -92,7 +128,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       id: "responseGeneration",
       label: "LLM response drafted",
       run: (state) => {
-        const responseMs = randomBetween(180, 320);
+        const responseMs = randomBetween(250, 700);
         return {
           ...state,
           responseText: generateMockResponse(state),
@@ -114,7 +150,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       id: "tts",
       label: "Speech synthesized",
       run: (state) => {
-        const ttsMs = randomBetween(100, 200);
+        const ttsMs = randomBetween(150, 400);
         synthesizeMockSpeech(state.responseText ?? "");
         const totalMs = (state.latency?.sttMs ?? 0) + (state.latency?.understandingMs ?? 0) + (state.latency?.toolMs ?? 0) + (state.latency?.responseMs ?? 0) + ttsMs;
         return {
