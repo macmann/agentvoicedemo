@@ -22,20 +22,36 @@ export interface PolicyThresholdView {
   sttFailureEscalationCount: number;
 }
 
+export interface StructuredUnderstandingResult {
+  intent: string;
+  intentConfidence: number;
+  entities: Record<string, string>;
+  sentiment?: string;
+  empathyNeeded: boolean;
+  workflowRequired: boolean;
+  recommendedWorkflow?: string;
+  handoffRecommended: boolean;
+  reason?: string;
+}
+
+export interface UnderstandingDiagnostics {
+  provider: "openai" | "mock";
+  model: string;
+  promptType: "structured_intent_v1";
+  rawOutput: string;
+  validationStatus: "valid" | "sanitized" | "fallback";
+  fallbackBehavior: string;
+}
+
 export interface SessionState {
   utterance: string;
   transcript?: string;
-  understanding?: {
-    intent: string;
-    intentConfidence: number;
-    entities: Record<string, string>;
-    sentiment?: string;
-    empathyNeeded: boolean;
-    workflowRequired: boolean;
-    recommendedWorkflow?: string;
-    handoffRecommended: boolean;
-    reason?: string;
+  understanding?: StructuredUnderstandingResult;
+  understandingProviderResult?: {
+    understanding: StructuredUnderstandingResult;
+    diagnostics: UnderstandingDiagnostics;
   };
+  understandingDiagnostics?: UnderstandingDiagnostics;
   routing?: {
     decision: "workflow" | "no_workflow" | "handoff" | "clarify";
     workflowName?: string;

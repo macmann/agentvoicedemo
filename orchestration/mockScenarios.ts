@@ -115,7 +115,7 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
   }
 
   return {
-    intent: "unknown",
+    intent: "unclear",
     supportIntent: false,
     emotionOnly: false,
     empathyNeeded: false,

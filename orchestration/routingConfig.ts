@@ -5,6 +5,7 @@ export type UnderstoodIntent =
   | "reschedule_visit"
   | "talk_to_human"
   | "empathy_only"
+  | "unclear"
   | "unknown";
 
 export type RoutingDecision = "workflow" | "no_workflow" | "handoff" | "clarify";
@@ -32,5 +33,6 @@ export const ROUTING_CONFIG: Record<UnderstoodIntent, RouteConfigEntry> = {
   reschedule_visit: INTENT_ROUTING_TABLE[3],
   talk_to_human: INTENT_ROUTING_TABLE[4],
   empathy_only: INTENT_ROUTING_TABLE[5],
-  unknown: { intent: "unknown", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." }
+  unclear: { intent: "unclear", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." },
+  unknown: { intent: "unclear", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." }
 };

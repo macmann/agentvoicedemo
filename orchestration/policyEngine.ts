@@ -1,15 +1,27 @@
 import { parseScenarioSignals } from "@/orchestration/mockScenarios";
-import { ROUTING_CONFIG } from "@/orchestration/routingConfig";
+import { ROUTING_CONFIG, UnderstoodIntent } from "@/orchestration/routingConfig";
 import { POLICY_THRESHOLDS } from "@/orchestration/thresholdConstants";
-import { PolicyCounters } from "@/types/session";
+import { PolicyCounters, SessionState } from "@/types/session";
 
 export interface PolicyOptions {
   workflowMode: "auto" | "workflow" | "no_workflow";
 }
 
-export function runPolicyEngine(utterance: string, options: PolicyOptions, previousCounters?: PolicyCounters) {
-  const signals = parseScenarioSignals(utterance);
-  const route = ROUTING_CONFIG[signals.intent];
+
+function toKnownIntent(intent?: string): UnderstoodIntent {
+  if (!intent) return "unclear";
+  return (Object.prototype.hasOwnProperty.call(ROUTING_CONFIG, intent) ? intent : "unclear") as UnderstoodIntent;
+}
+
+export function runPolicyEngine(
+  utterance: string,
+  options: PolicyOptions,
+  previousCounters?: PolicyCounters,
+  providerResult?: SessionState["understandingProviderResult"]
+) {
+  const fallbackSignals = parseScenarioSignals(utterance);
+  const inferredIntent = toKnownIntent(providerResult?.understanding.intent ?? fallbackSignals.intent);
+  const route = ROUTING_CONFIG[inferredIntent] ?? ROUTING_CONFIG.unclear;
 
   const counters = {
     sttFailures: previousCounters?.sttFailures ?? 0,
@@ -21,34 +33,44 @@ export function runPolicyEngine(utterance: string, options: PolicyOptions, previ
     options.workflowMode === "workflow" ||
     (options.workflowMode === "auto" && route.decision === "workflow");
 
-  const recommendedWorkflow = workflowRequired ? route.workflowName : undefined;
+  const recommendedWorkflow = workflowRequired ? providerResult?.understanding.recommendedWorkflow ?? route.workflowName : undefined;
 
   let selectedRule = "default_support";
-  let reason = route.reason;
+  let reason = providerResult?.understanding.reason ?? route.reason;
 
-  if (signals.explicitHumanRequest) {
+  const explicitHumanRequest =
+    inferredIntent === "talk_to_human" ||
+    providerResult?.understanding.handoffRecommended ||
+    fallbackSignals.explicitHumanRequest;
+
+  const empathyNeeded = providerResult?.understanding.empathyNeeded ?? fallbackSignals.empathyNeeded;
+  const supportIntent = ["report_internet_issue", "report_router_issue", "outage_check", "reschedule_visit", "talk_to_human"].includes(inferredIntent);
+  const emotionOnly = inferredIntent === "empathy_only";
+
+  if (explicitHumanRequest) {
     selectedRule = "explicit_human_request_always_handoff";
     reason = "User explicitly asked for a human; policy bypasses automation.";
-  } else if (signals.discomfortDetected && signals.supportIntent) {
+  } else if (empathyNeeded && supportIntent) {
     selectedRule = "emotion_plus_task_ack_then_execute";
     reason = "User expressed discomfort and asked for help, so empathy must lead before task execution.";
-  } else if (signals.emotionOnly) {
+  } else if (emotionOnly) {
     selectedRule = "emotion_only_no_workflow";
     reason = "User only expressed emotion, so provide empathy without workflow actions.";
   }
 
   return {
     understanding: {
-      intent: signals.intent,
-      intentConfidence: signals.confidence,
-      entities: signals.entities,
-      sentiment: signals.sentiment,
-      empathyNeeded: signals.empathyNeeded,
+      intent: inferredIntent,
+      intentConfidence: providerResult?.understanding.intentConfidence ?? fallbackSignals.confidence,
+      entities: providerResult?.understanding.entities ?? fallbackSignals.entities,
+      sentiment: providerResult?.understanding.sentiment ?? fallbackSignals.sentiment,
+      empathyNeeded,
       workflowRequired,
       recommendedWorkflow,
-      handoffRecommended: signals.explicitHumanRequest,
+      handoffRecommended: providerResult?.understanding.handoffRecommended ?? fallbackSignals.explicitHumanRequest,
       reason
     },
+    understandingDiagnostics: providerResult?.diagnostics,
     policy: {
       counters,
       thresholds: POLICY_THRESHOLDS,
@@ -58,6 +80,6 @@ export function runPolicyEngine(utterance: string, options: PolicyOptions, previ
       handoffRule: "explicit_human_or_repeated_failures",
       routingConfig: route
     },
-    sttFailureHint: signals.sttFailureHint
+    sttFailureHint: fallbackSignals.sttFailureHint
   };
 }

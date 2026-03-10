@@ -35,11 +35,18 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       label: "Intent and entities extracted",
       run: (state) => {
         const understandingMs = randomBetween(200, 600);
-        const evaluated = runDeterministicUnderstandingPolicy(state.utterance, { workflowMode: options.workflowMode }, state.policy?.counters);
+        const evaluated = runDeterministicUnderstandingPolicy(
+          state.utterance,
+          { workflowMode: options.workflowMode },
+          state.policy?.counters,
+          state.understandingProviderResult
+        );
 
         return {
           ...state,
           understanding: evaluated.understanding,
+          understandingDiagnostics: evaluated.understandingDiagnostics,
+          understandingProviderResult: undefined,
           policy: {
             ...evaluated.policy,
             counters: {

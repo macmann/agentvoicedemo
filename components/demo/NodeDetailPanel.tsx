@@ -4,6 +4,7 @@ import { FlowNodeId, SessionState } from "@/types/session";
 export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; session: SessionState }) {
   const node = nodeCatalog.find((item) => item.id === nodeId) ?? nodeCatalog[0];
   const isDecisionNode = nodeId === "decision";
+  const isUnderstandingNode = nodeId === "understanding";
 
   return (
     <aside className="h-full rounded-xl border border-slate-200 bg-white p-4">
@@ -39,6 +40,40 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
           <dt className="font-medium text-slate-500">Fallback Behavior</dt>
           <dd>{node.fallbackBehavior}</dd>
         </div>
+
+
+        {isUnderstandingNode ? (
+          <>
+            <div>
+              <dt className="font-medium text-slate-500">Provider</dt>
+              <dd>{session.understandingDiagnostics?.provider ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Model</dt>
+              <dd>{session.understandingDiagnostics?.model ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Prompt type</dt>
+              <dd>{session.understandingDiagnostics?.promptType ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Validation status</dt>
+              <dd>{session.understandingDiagnostics?.validationStatus ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Routing threshold</dt>
+              <dd>{session.policy?.thresholds.minIntentConfidence ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Raw structured output</dt>
+              <dd className="break-all">{session.understandingDiagnostics?.rawOutput ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Fallback behavior</dt>
+              <dd>{session.understandingDiagnostics?.fallbackBehavior ?? "—"}</dd>
+            </div>
+          </>
+        ) : null}
 
         {isDecisionNode ? (
           <>
