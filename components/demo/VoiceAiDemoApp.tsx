@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArchitectureFlow } from "@/components/demo/ArchitectureFlow";
 import { ControlsPanel } from "@/components/demo/ControlsPanel";
 import { ExecutionPanel } from "@/components/demo/ExecutionPanel";
@@ -24,18 +24,42 @@ export function VoiceAiDemoApp() {
   const capturePromise = useRef<Promise<{ transcript: string; confidence: number; status: "recognized" | "fallback"; reason?: string; failureType?: "permission_denied" | "recording_failure" | "empty_transcript" | "low_confidence"; timestamps?: Array<{ startMs: number; endMs: number; text: string }>; }> | null>(null);
   const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, runAll, reset, setSession, traversedEdges } = useSessionSimulator(sampleUtterances[0]);
 
-  const options: SimulationOptions = { forceFallback, workflowMode, toolMode };
+  const options: SimulationOptions = useMemo(() => ({ forceFallback, workflowMode, toolMode }), [forceFallback, workflowMode, toolMode]);
+  const progressLabel = useMemo(() => `${Math.min(stepIndex, totalSteps)}/${totalSteps} steps`, [stepIndex, totalSteps]);
 
-  const handleRun = async () => {
+  const handleRun = useCallback(async () => {
     if (stepMode) {
       await applyStep(stepIndex, options);
       return;
     }
 
     await runAll(options);
-  };
+  }, [applyStep, options, runAll, stepIndex, stepMode]);
 
-  const handleNext = async () => applyStep(stepIndex, options);
+  const handleNext = useCallback(async () => applyStep(stepIndex, options), [applyStep, options, stepIndex]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement)?.tagName === "INPUT" || (event.target as HTMLElement)?.tagName === "TEXTAREA" || (event.target as HTMLElement)?.tagName === "SELECT") {
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "enter") {
+        event.preventDefault();
+        void handleRun();
+      }
+
+      if (stepMode && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        if (stepIndex < totalSteps) {
+          void handleNext();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleNext, handleRun, stepIndex, stepMode, totalSteps]);
 
   const handleUtterance = (utterance: string) => {
     setSession((prev) => ({ ...prev, utterance }));
@@ -98,6 +122,11 @@ export function VoiceAiDemoApp() {
         <p className="text-sm text-slate-600">
           Demo goals: low latency voice loop, deterministic workflow control, natural conversational behavior, and graceful handoff with inspectable state.
         </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+          <span className="rounded bg-slate-100 px-2 py-1">Progress: {progressLabel}</span>
+          <span className="rounded bg-slate-100 px-2 py-1">Shortcut: Ctrl/Cmd + Enter = run</span>
+          <span className="rounded bg-slate-100 px-2 py-1">Shortcut: N = next step (step mode)</span>
+        </div>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr_340px]">

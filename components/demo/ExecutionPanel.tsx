@@ -1,7 +1,11 @@
+"use client";
+
 import { DemoLogEvent, SessionState } from "@/types/session";
 import { formatMs } from "@/utils/format";
+import { useMemo, useState } from "react";
 
 export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; session: SessionState }) {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
   const stages = [
     { label: "STT", value: session.latency?.sttMs },
     { label: "Understanding", value: session.latency?.understandingMs },
@@ -10,9 +14,36 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
     { label: "TTS", value: session.latency?.ttsMs }
   ];
 
+  const inspectionPayload = useMemo(
+    () => ({
+      generatedAt: new Date().toISOString(),
+      session,
+      logs
+    }),
+    [logs, session]
+  );
+
+  const copyInspectionJson = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(inspectionPayload, null, 2));
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  };
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-base font-semibold">Execution Log & Latency Timeline</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Execution Log & Latency Timeline</h2>
+        <div className="flex items-center gap-2">
+          <button className="rounded border border-slate-300 px-2 py-1 text-xs" onClick={copyInspectionJson} type="button">
+            Copy inspection JSON
+          </button>
+          {copyStatus === "copied" ? <span className="text-xs text-emerald-700">Copied.</span> : null}
+          {copyStatus === "error" ? <span className="text-xs text-rose-700">Copy failed.</span> : null}
+        </div>
+      </div>
       <div className="mt-3 grid gap-4 lg:grid-cols-[2fr_1fr]">
         <ul className="max-h-40 space-y-2 overflow-auto text-sm">
           {logs.length === 0 ? (

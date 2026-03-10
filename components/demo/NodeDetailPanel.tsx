@@ -119,7 +119,7 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             </div>
             <div>
               <dt className="font-medium text-slate-500">Raw structured output</dt>
-              <dd className="break-all">{session.understandingDiagnostics?.rawOutput ?? "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.understandingDiagnostics?.rawOutput ?? "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Fallback behavior</dt>
@@ -153,11 +153,11 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             </div>
             <div>
               <dt className="font-medium text-slate-500">Request payload</dt>
-              <dd className="break-all">{session.toolExecution ? JSON.stringify(session.toolExecution.requestPayload) : "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.toolExecution ? JSON.stringify(session.toolExecution.requestPayload, null, 2) : "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Response payload</dt>
-              <dd className="break-all">{session.toolExecution ? JSON.stringify(session.toolExecution.responsePayload ?? session.toolExecution.errorMessage) : "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.toolExecution ? JSON.stringify(session.toolExecution.responsePayload ?? session.toolExecution.errorMessage, null, 2) : "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Fallback behavior</dt>
@@ -188,7 +188,7 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             </div>
             <div>
               <dt className="font-medium text-slate-500">Structured input context</dt>
-              <dd className="break-all">{session.responseGeneration ? JSON.stringify(session.responseGeneration.structuredContext) : "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.responseGeneration ? JSON.stringify(session.responseGeneration.structuredContext, null, 2) : "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Final response text</dt>
@@ -213,7 +213,7 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             </div>
             <div>
               <dt className="font-medium text-slate-500">Voice settings</dt>
-              <dd className="break-all">{session.tts ? JSON.stringify(session.tts.settings) : "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.tts ? JSON.stringify(session.tts.settings, null, 2) : "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">First-audio latency</dt>
@@ -234,7 +234,7 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
           <>
             <div>
               <dt className="font-medium text-slate-500">Routing config</dt>
-              <dd className="break-all">{session.policy?.routingConfig ? JSON.stringify(session.policy.routingConfig) : "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.policy?.routingConfig ? JSON.stringify(session.policy.routingConfig, null, 2) : "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Selected rule</dt>
@@ -250,7 +250,7 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             </div>
             <div>
               <dt className="font-medium text-slate-500">Retry counts</dt>
-              <dd className="break-all">{session.policy?.counters ? JSON.stringify(session.policy.counters) : "—"}</dd>
+              <dd className="whitespace-pre-wrap break-words">{session.policy?.counters ? JSON.stringify(session.policy.counters, null, 2) : "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Why this path was chosen</dt>
