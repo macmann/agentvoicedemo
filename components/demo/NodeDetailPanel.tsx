@@ -56,6 +56,14 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
               <dd>{session.stt?.provider ?? "—"}</dd>
             </div>
             <div>
+              <dt className="font-medium text-slate-500">Streaming indicator</dt>
+              <dd>{session.stt?.streaming ? "simulated_streaming:on" : "simulated_streaming:off"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Language</dt>
+              <dd>{session.stt?.language ?? "en-US"}</dd>
+            </div>
+            <div>
               <dt className="font-medium text-slate-500">Model</dt>
               <dd>{session.stt?.model ?? "—"}</dd>
             </div>
@@ -66,6 +74,10 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             <div>
               <dt className="font-medium text-slate-500">Confidence</dt>
               <dd>{session.stt?.confidence ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Confidence threshold</dt>
+              <dd>{session.policy?.thresholds.minIntentConfidence ?? "—"}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Transcript output</dt>

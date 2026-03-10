@@ -1,61 +1,108 @@
-import { SttDiagnostics, SttInputMode } from "@/types/session";
+import { SttInputMode, SttResultContract } from "@/types/session";
 
-interface SttRequest {
+interface SttAdapterRequest {
   utterance: string;
   inputMode: SttInputMode;
+  language?: string;
   microphoneCapture?: {
     transcript?: string;
     confidence?: number;
-    status?: "recognized" | "fallback";
     reason?: string;
+    failureType?: "permission_denied" | "recording_failure" | "empty_transcript" | "low_confidence";
+    timestamps?: Array<{ startMs: number; endMs: number; text: string }>;
   };
+  streamingSimulated?: boolean;
 }
+
+const STT_CONFIDENCE_THRESHOLD = 0.72;
 
 function clampConfidence(value: number) {
-  return Math.min(1, Math.max(0, value));
+  return Math.max(0, Math.min(1, value));
 }
 
-export async function getSttResult(request: SttRequest): Promise<SttDiagnostics> {
-  const utterance = request.utterance.trim();
+export async function transcribeWithProvider(_request: SttAdapterRequest): Promise<SttResultContract | null> {
+  return null;
+}
+
+export async function transcribeWithMock(request: SttAdapterRequest): Promise<SttResultContract> {
+  const typed = request.utterance.trim();
+  const language = request.language ?? "en-US";
 
   if (request.inputMode === "text") {
+    const confidence = typed ? 0.99 : 0.12;
+    const fallbackOccurred = !typed;
     return {
-      provider: "browser_text",
-      model: "text-input-passthrough-v1",
-      inputMode: "text",
-      transcript: utterance,
-      confidence: utterance ? 0.99 : 0.2,
-      status: utterance ? "recognized" : "fallback",
-      rawInput: request.utterance,
-      reason: utterance ? undefined : "No typed text provided.",
-      fallbackBehavior: "If text is empty, preserve session state and request clarification."
+      transcript: typed,
+      confidence,
+      provider: "mock_text_passthrough",
+      mode: typed ? "text" : "mock",
+      language,
+      streaming: Boolean(request.streamingSimulated),
+      status: fallbackOccurred ? "fallback" : "recognized",
+      fallbackOccurred,
+      failureType: fallbackOccurred ? "empty_transcript" : undefined,
+      fallbackBehavior: fallbackOccurred
+        ? "Empty text falls back to safe clarify path and increments STT failure counters."
+        : "Text input is used as a reliable demo-safe transcript source."
     };
   }
 
   const micTranscript = request.microphoneCapture?.transcript?.trim() ?? "";
-  if (micTranscript) {
+  const micConfidence = clampConfidence(request.microphoneCapture?.confidence ?? 0.45);
+
+  if (request.microphoneCapture?.failureType === "permission_denied") {
     return {
-      provider: "browser_speech_recognition",
-      model: "web-speech-api",
-      inputMode: "microphone",
-      transcript: micTranscript,
-      confidence: clampConfidence(request.microphoneCapture?.confidence ?? 0.82),
-      status: request.microphoneCapture?.status ?? "recognized",
-      rawInput: micTranscript,
-      reason: request.microphoneCapture?.reason,
-      fallbackBehavior: "If mic capture is low confidence, keep transcript and route through deterministic clarification."
+      transcript: typed,
+      confidence: typed ? 0.5 : 0.1,
+      provider: "mock_microphone_fallback",
+      mode: "mock",
+      language,
+      streaming: Boolean(request.streamingSimulated),
+      status: "fallback",
+      fallbackOccurred: true,
+      failureType: "permission_denied",
+      reason: request.microphoneCapture.reason ?? "Microphone permission denied by browser.",
+      fallbackBehavior: "Permission denial falls back to text transcript input."
     };
   }
 
+  if (!micTranscript) {
+    return {
+      transcript: typed,
+      confidence: typed ? 0.44 : 0.1,
+      provider: "mock_microphone_fallback",
+      mode: "mock",
+      language,
+      streaming: Boolean(request.streamingSimulated),
+      status: "fallback",
+      fallbackOccurred: true,
+      failureType: request.microphoneCapture?.failureType ?? "recording_failure",
+      reason: request.microphoneCapture?.reason ?? "No microphone transcript captured.",
+      fallbackBehavior: "Recording failures fall back to text mode to keep demo deterministic and reliable."
+    };
+  }
+
+  const lowConfidence = micConfidence < STT_CONFIDENCE_THRESHOLD;
   return {
-    provider: "browser_text",
-    model: "microphone-fallback-to-text-v1",
-    inputMode: "microphone",
-    transcript: utterance,
-    confidence: utterance ? 0.52 : 0.2,
-    status: "fallback",
-    rawInput: request.utterance,
-    reason: "Microphone capture unavailable; reused text input.",
-    fallbackBehavior: "Fallback to text mode while preserving inspectable reason in STT diagnostics."
+    transcript: micTranscript,
+    confidence: micConfidence,
+    provider: "mock_browser_speech_recognition",
+    mode: "microphone",
+    language,
+    streaming: Boolean(request.streamingSimulated),
+    status: lowConfidence ? "fallback" : "recognized",
+    timestamps: request.microphoneCapture?.timestamps,
+    fallbackOccurred: lowConfidence,
+    failureType: lowConfidence ? "low_confidence" : undefined,
+    reason: lowConfidence ? `Transcript confidence below threshold (${STT_CONFIDENCE_THRESHOLD}).` : undefined,
+    fallbackBehavior: "Low-confidence microphone transcripts are preserved for inspectability and routed safely."
   };
 }
+
+export async function getTranscript(request: SttAdapterRequest): Promise<SttResultContract> {
+  const provider = await transcribeWithProvider(request);
+  if (provider) return provider;
+  return transcribeWithMock(request);
+}
+
+export { STT_CONFIDENCE_THRESHOLD };

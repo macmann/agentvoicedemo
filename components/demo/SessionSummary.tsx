@@ -40,6 +40,14 @@ export function SessionSummary({ session }: { session: SessionState }) {
           <p className="font-medium">{session.stt?.status ?? "—"} / {session.stt ? session.stt.confidence.toFixed(2) : "—"}</p>
         </div>
         <div>
+          <p className="text-slate-500">STT fallback occurred</p>
+          <p className="font-medium">{session.stt ? String(session.stt.fallbackOccurred) : "—"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">STT failure count</p>
+          <p className="font-medium">{session.policy?.counters.sttFailures ?? 0}</p>
+        </div>
+        <div>
           <p className="text-slate-500">Intent</p>
           <p className="font-medium">{session.understanding?.intent ?? "—"}</p>
         </div>

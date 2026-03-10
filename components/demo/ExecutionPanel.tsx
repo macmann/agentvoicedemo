@@ -59,6 +59,7 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
             <p className="text-slate-600">Mode: {session.stt?.inputMode ?? session.sttInputMode ?? "—"}</p>
             <p className="text-slate-600">Provider: {session.stt?.provider ?? "—"}</p>
             <p className="text-slate-600">Status: {session.stt?.status ?? "—"}</p>
+            <p className="text-slate-600">Failure type: {session.stt?.failureType ?? "—"}</p>
             <p className="text-slate-600">Reason: {session.stt?.reason ?? "—"}</p>
           </div>
 

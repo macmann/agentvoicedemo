@@ -5,6 +5,8 @@ interface BrowserMicCaptureResult {
   confidence: number;
   status: "recognized" | "fallback";
   reason?: string;
+  failureType?: "permission_denied" | "recording_failure" | "empty_transcript" | "low_confidence";
+  timestamps?: Array<{ startMs: number; endMs: number; text: string }>;
 }
 
 type RecognitionCtor = new () => {
@@ -16,6 +18,7 @@ type RecognitionCtor = new () => {
   stop: () => void;
   onresult: ((event: { results?: ArrayLike<ArrayLike<{ transcript?: string; confidence?: number }>> }) => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
 };
 
 declare global {
@@ -25,85 +28,157 @@ declare global {
   }
 }
 
-export async function getSpeechToText(state: SessionState): Promise<SttDiagnostics> {
+let activeRecognition: InstanceType<RecognitionCtor> | null = null;
+let activeStartTime = 0;
+let activeFinalize: ((result: BrowserMicCaptureResult) => void) | null = null;
+
+function finalizeCapture(result: BrowserMicCaptureResult) {
+  if (!activeFinalize) return;
+  const done = activeFinalize;
+  activeFinalize = null;
+  activeRecognition = null;
+  done(result);
+}
+
+export async function requestMicrophonePermission() {
+  if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return { granted: false, reason: "Microphone permission API unavailable in this environment." };
+  }
+
   try {
-    const response = await fetch("/api/stt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        utterance: state.utterance,
-        inputMode: state.sttInputMode ?? "text",
-        microphoneCapture: state.sttCapture
-      })
-    });
-
-    if (!response.ok) {
-      return {
-        provider: "browser_text",
-        model: "client-fallback-v1",
-        inputMode: state.sttInputMode ?? "text",
-        transcript: state.utterance,
-        confidence: state.utterance ? 0.5 : 0.2,
-        status: "fallback",
-        rawInput: state.utterance,
-        reason: `STT API unavailable (${response.status}).`,
-        fallbackBehavior: "Fallback to local text transcript on API failure."
-      };
-    }
-
-    return (await response.json()) as SttDiagnostics;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return { granted: true };
   } catch {
-    return {
-      provider: "browser_text",
-      model: "client-fallback-v1",
-      inputMode: state.sttInputMode ?? "text",
-      transcript: state.utterance,
-      confidence: state.utterance ? 0.5 : 0.2,
-      status: "fallback",
-      rawInput: state.utterance,
-      reason: "STT request failed in browser; transcript preserved from input text.",
-      fallbackBehavior: "Fallback to local text transcript on request exception."
-    };
+    return { granted: false, reason: "Microphone permission denied by browser/user settings." };
   }
 }
 
-export function captureFromMicrophone(): Promise<BrowserMicCaptureResult> {
+export function startMicrophoneCapture(language = "en-US") {
   if (typeof window === "undefined") {
-    return Promise.resolve({ transcript: "", confidence: 0, status: "fallback", reason: "Microphone capture unavailable on server." });
+    return {
+      ok: false as const,
+      result: Promise.resolve({ transcript: "", confidence: 0, status: "fallback" as const, failureType: "recording_failure" as const, reason: "Microphone not available on server." })
+    };
   }
 
   const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
   if (!Recognition) {
-    return Promise.resolve({ transcript: "", confidence: 0, status: "fallback", reason: "Browser SpeechRecognition API unavailable." });
+    return {
+      ok: false as const,
+      result: Promise.resolve({ transcript: "", confidence: 0, status: "fallback" as const, failureType: "recording_failure" as const, reason: "SpeechRecognition API unavailable." })
+    };
   }
 
-  return new Promise((resolve) => {
-    const recognition = new Recognition();
-    recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+  const recognition = new Recognition();
+  recognition.lang = language;
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  activeRecognition = recognition;
+  activeStartTime = Date.now();
 
-    const timeout = window.setTimeout(() => {
-      recognition.stop();
-      resolve({ transcript: "", confidence: 0, status: "fallback", reason: "Microphone timeout without final transcript." });
-    }, 8000);
+  const result = new Promise<BrowserMicCaptureResult>((resolve) => {
+    activeFinalize = resolve;
+    let finalTranscript = "";
+    let bestConfidence = 0;
 
     recognition.onresult = (event) => {
-      window.clearTimeout(timeout);
-      const first = event.results?.[0]?.[0];
-      resolve({
-        transcript: first?.transcript?.trim() ?? "",
-        confidence: typeof first?.confidence === "number" ? first.confidence : 0.8,
-        status: first?.transcript ? "recognized" : "fallback"
-      });
+      const first = event.results?.[event.results.length - 1]?.[0];
+      if (!first?.transcript) return;
+      finalTranscript = first.transcript.trim();
+      bestConfidence = Math.max(bestConfidence, typeof first.confidence === "number" ? first.confidence : 0.8);
     };
 
     recognition.onerror = (event) => {
-      window.clearTimeout(timeout);
-      resolve({ transcript: "", confidence: 0, status: "fallback", reason: `Microphone error: ${event.error ?? "unknown"}.` });
+      finalizeCapture({
+        transcript: "",
+        confidence: 0,
+        status: "fallback",
+        failureType: "recording_failure",
+        reason: `Microphone recording error: ${event.error ?? "unknown"}.`
+      });
+    };
+
+    recognition.onend = () => {
+      if (finalTranscript) {
+        finalizeCapture({
+          transcript: finalTranscript,
+          confidence: bestConfidence || 0.8,
+          status: "recognized",
+          timestamps: [{ startMs: 0, endMs: Date.now() - activeStartTime, text: finalTranscript }]
+        });
+        return;
+      }
+
+      finalizeCapture({
+        transcript: "",
+        confidence: 0,
+        status: "fallback",
+        failureType: "empty_transcript",
+        reason: "Recording ended without a usable transcript."
+      });
     };
 
     recognition.start();
   });
+
+  return { ok: true as const, result };
+}
+
+export function stopMicrophoneCapture() {
+  activeRecognition?.stop();
+}
+
+export async function transcribeWithProvider(state: SessionState): Promise<SttDiagnostics | null> {
+  const response = await fetch("/api/stt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      utterance: state.utterance,
+      inputMode: state.sttInputMode ?? "text",
+      language: "en-US",
+      microphoneCapture: state.sttCapture,
+      streamingSimulated: Boolean(state.sttStreamingSimulated)
+    })
+  });
+
+  if (!response.ok) return null;
+  const result = (await response.json()) as Omit<SttDiagnostics, "model" | "inputMode" | "rawInput">;
+  return {
+    ...result,
+    model: "stt-adapter-v1",
+    inputMode: state.sttInputMode ?? "text",
+    rawInput: state.utterance
+  };
+}
+
+export async function transcribeWithMock(state: SessionState): Promise<SttDiagnostics> {
+  const transcript = state.utterance.trim();
+  return {
+    transcript,
+    confidence: transcript ? 0.5 : 0.1,
+    provider: "client_mock_fallback",
+    mode: "mock",
+    language: "en-US",
+    streaming: Boolean(state.sttStreamingSimulated),
+    status: transcript ? "recognized" : "fallback",
+    fallbackOccurred: true,
+    failureType: transcript ? "low_confidence" : "empty_transcript",
+    fallbackBehavior: "STT adapter fallback preserves typed text for deterministic downstream routing.",
+    reason: "Provider unavailable; using client fallback transcript.",
+    model: "stt-adapter-v1",
+    inputMode: state.sttInputMode ?? "text",
+    rawInput: state.utterance
+  };
+}
+
+export async function getTranscript(state: SessionState): Promise<SttDiagnostics> {
+  try {
+    const provider = await transcribeWithProvider(state);
+    if (provider) return provider;
+    return transcribeWithMock(state);
+  } catch {
+    return transcribeWithMock(state);
+  }
 }
