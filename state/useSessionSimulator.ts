@@ -108,7 +108,9 @@ export function useSessionSimulator(initialUtterance: string) {
             ? "fallback"
             : next.routing?.decision === "clarify" && step.id === "decision"
               ? "fallback"
-              : "success"
+              : next.tts?.status === "fallback" && step.id === "tts"
+                ? "fallback"
+                : "success"
     }));
     setLogs((logPrev) => [
       {

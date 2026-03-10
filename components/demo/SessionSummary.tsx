@@ -1,7 +1,24 @@
+"use client";
+
+import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { SessionState } from "@/types/session";
 import { formatMs } from "@/utils/format";
+import { useState } from "react";
 
 export function SessionSummary({ session }: { session: SessionState }) {
+  const [audioStatus, setAudioStatus] = useState("idle");
+
+  const replay = async () => {
+    if (!session.tts) return;
+    const result = await playSynthesizedAudio(session.tts);
+    setAudioStatus(result.ok ? "playing" : `blocked: ${result.reason}`);
+  };
+
+  const stop = () => {
+    stopSynthesizedAudio();
+    setAudioStatus("stopped");
+  };
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <h2 className="text-base font-semibold">Session Summary</h2>
@@ -24,66 +41,39 @@ export function SessionSummary({ session }: { session: SessionState }) {
         </div>
         <div>
           <p className="text-slate-500">Sentiment / empathy</p>
-          <p className="font-medium">
-            {session.understanding?.sentiment ?? "—"}
-            {session.understanding?.empathyNeeded ? " (empathy cue)" : ""}
-          </p>
+          <p className="font-medium">{session.understanding?.sentiment ?? "—"}{session.understanding?.empathyNeeded ? " (empathy cue)" : ""}</p>
         </div>
-        <div>
-          <p className="text-slate-500">Policy empathy_needed</p>
-          <p className="font-medium">{session.understanding?.empathyNeeded ? "true" : "false"}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Policy workflow_required</p>
-          <p className="font-medium">{session.understanding?.workflowRequired ? "true" : "false"}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Selected workflow</p>
-          <p className="font-medium">{session.routing?.workflowName ?? "—"}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Handoff reason</p>
-          <p className="font-medium">{session.routing?.handoffReason ?? session.handoff?.reason ?? "—"}</p>
-        </div>
-        <div className="col-span-2">
-          <p className="text-slate-500">Clarification reason</p>
-          <p className="font-medium">{session.routing?.clarificationReason ?? "—"}</p>
-        </div>
-        <div className="col-span-2">
-          <p className="text-slate-500">Entities</p>
-          <p className="font-medium break-all">{session.understanding ? JSON.stringify(session.understanding.entities) : "—"}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Workflow selected/skipped</p>
-          <p className="font-medium">{session.routing?.workflowName ?? `Skipped (${session.routing?.decision ?? "—"})`}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Tool result</p>
-          <p className="font-medium break-all">{session.toolResult ? `${session.toolResult.provider ?? "unknown"}/${session.toolResult.toolName}: ${JSON.stringify(session.toolResult.result ?? session.toolResult.error)}` : "—"}</p>
-        </div>
-
-        <div>
-          <p className="text-slate-500">Tool execution mode</p>
-          <p className="font-medium">{session.toolExecution?.executionMode ?? "—"}</p>
-        </div>
-        <div>
-          <p className="text-slate-500">Tool execution status/time</p>
-          <p className="font-medium">{session.toolExecution ? `${session.toolExecution.executionStatus} · ${session.toolExecution.executionTimeMs}ms` : "—"}</p>
-        </div>
-
         <div className="col-span-2">
           <p className="text-slate-500">Final generated response</p>
           <p className="font-medium">{session.responseText ?? "—"}</p>
         </div>
         <div>
-          <p className="text-slate-500">Handoff decision</p>
-          <p className="font-medium">{session.handoff?.triggered ? `Triggered (${session.handoff.reason ?? "policy"})` : "Not triggered"}</p>
+          <p className="text-slate-500">TTS first audio latency</p>
+          <p className="font-medium">{session.tts ? `${session.tts.firstAudioLatencyMs}ms` : "—"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Audio status indicator</p>
+          <p className="font-medium">{session.tts?.status ?? "—"} · {audioStatus}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Voice style / speed</p>
+          <p className="font-medium">{session.tts ? `${session.tts.settings.voiceStyle} / ${session.tts.settings.speed}x` : "—"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Streaming enabled</p>
+          <p className="font-medium">{session.tts ? `${session.tts.settings.streamingEnabled}` : "—"}</p>
+        </div>
+        <div className="col-span-2 flex gap-2">
+          <button className="rounded bg-indigo-600 px-3 py-2 text-white disabled:bg-indigo-300" onClick={replay} disabled={!session.tts} type="button">Play / Replay</button>
+          <button className="rounded border border-slate-300 px-3 py-2" onClick={stop} type="button">Stop</button>
+        </div>
+        <div className="col-span-2">
+          <p className="text-slate-500">TTS fallback reason</p>
+          <p className="font-medium">{session.tts?.reason ?? "—"}</p>
         </div>
         <div className="col-span-2">
           <p className="text-slate-500">Latency breakdown</p>
-          <p className="font-medium">
-            STT {formatMs(session.latency?.sttMs)} · Understanding {formatMs(session.latency?.understandingMs)} · Tool {formatMs(session.latency?.toolMs)} · Response {formatMs(session.latency?.responseMs)} · TTS {formatMs(session.latency?.ttsMs)} · Total {formatMs(session.latency?.totalMs)}
-          </p>
+          <p className="font-medium">STT {formatMs(session.latency?.sttMs)} · Understanding {formatMs(session.latency?.understandingMs)} · Tool {formatMs(session.latency?.toolMs)} · Response {formatMs(session.latency?.responseMs)} · TTS {formatMs(session.latency?.ttsMs)} · Total {formatMs(session.latency?.totalMs)}</p>
         </div>
       </div>
     </section>

@@ -45,9 +45,9 @@ export const nodeCatalog: NodeDetails[] = [
     id: "responseGeneration",
     label: "LLM Response Generation",
     purpose: "Generate conversational response grounded in tool outputs and policy.",
-    input: "State snapshot + tool result",
-    output: "Response text",
-    parameters: ["temperature=0.4", "style=empathetic+concise", "grounding=required"],
+    input: "Structured context only (utterance, empathy, workflow/handoff/policy state)",
+    output: "Voice-friendly response text + diagnostics",
+    parameters: ["model=gpt-5-mini|mock", "tone=calm+helpful+empathetic", "maxLength=220", "grounding=required"],
     latencyEstimate: "250-700ms",
     fallbackBehavior: "Use deterministic template when LLM unavailable."
   },
@@ -57,7 +57,7 @@ export const nodeCatalog: NodeDetails[] = [
     purpose: "Render response text into natural speech for caller playback.",
     input: "Response text",
     output: "Audio waveform/stream",
-    parameters: ["voice=calm-neutral", "bargeIn=true", "chunkedStreaming=true"],
+    parameters: ["provider=openai|mock_browser", "voiceStyle=calm-neutral", "speed=1.0", "streaming=true"],
     latencyEstimate: "150-400ms",
     fallbackBehavior: "Fallback to alternate voice profile or text callback channel."
   },

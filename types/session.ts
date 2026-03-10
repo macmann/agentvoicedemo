@@ -43,6 +43,44 @@ export interface UnderstandingDiagnostics {
   fallbackBehavior: string;
 }
 
+export interface ResponseGenerationContext {
+  originalUtterance: string;
+  sentiment?: string;
+  empathyNeeded: boolean;
+  workflowPath: "workflow" | "no_workflow" | "handoff" | "clarify";
+  workflowResult: string;
+  handoffState: string;
+  clarificationState: string;
+  policyInstructions: string;
+}
+
+export interface ResponseGenerationDiagnostics {
+  provider: "openai" | "mock";
+  model: string;
+  toneSettings: string[];
+  maxResponseLength: number;
+  structuredContext: ResponseGenerationContext;
+  finalResponseText: string;
+  guardrailNote: string;
+  fallbackBehavior: string;
+}
+
+export interface TtsSettingsView {
+  voiceStyle: string;
+  speed: number;
+  streamingEnabled: boolean;
+}
+
+export interface TtsDiagnostics {
+  provider: "mock_browser" | "openai";
+  model: string;
+  status: "played" | "ready" | "fallback";
+  firstAudioLatencyMs: number;
+  settings: TtsSettingsView;
+  responseText: string;
+  reason?: string;
+  audioUrl?: string;
+}
 
 export interface ToolExecutionView {
   selectedTool: "diagnose_connectivity" | "check_outage_status" | "reschedule_technician" | "create_support_ticket";
@@ -83,6 +121,8 @@ export interface SessionState {
     error?: string;
   };
   responseText?: string;
+  responseGeneration?: ResponseGenerationDiagnostics;
+  tts?: TtsDiagnostics;
   handoff?: {
     triggered: boolean;
     reason?: string;

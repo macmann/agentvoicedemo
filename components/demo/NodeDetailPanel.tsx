@@ -6,6 +6,8 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
   const isDecisionNode = nodeId === "decision";
   const isUnderstandingNode = nodeId === "understanding";
   const isToolNode = nodeId === "toolExecution";
+  const isResponseNode = nodeId === "responseGeneration";
+  const isTtsNode = nodeId === "tts";
 
   return (
     <aside className="h-full rounded-xl border border-slate-200 bg-white p-4">
@@ -110,6 +112,70 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
             <div>
               <dt className="font-medium text-slate-500">Fallback behavior</dt>
               <dd>{session.toolExecution?.fallbackBehavior ?? "—"}</dd>
+            </div>
+          </>
+        ) : null}
+
+
+
+        {isResponseNode ? (
+          <>
+            <div>
+              <dt className="font-medium text-slate-500">Provider</dt>
+              <dd>{session.responseGeneration?.provider ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Model</dt>
+              <dd>{session.responseGeneration?.model ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Tone settings</dt>
+              <dd className="break-all">{session.responseGeneration?.toneSettings.join(", ") ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Max response length</dt>
+              <dd>{session.responseGeneration?.maxResponseLength ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Structured input context</dt>
+              <dd className="break-all">{session.responseGeneration ? JSON.stringify(session.responseGeneration.structuredContext) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Final response text</dt>
+              <dd>{session.responseGeneration?.finalResponseText ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Guardrail note</dt>
+              <dd>{session.responseGeneration?.guardrailNote ?? "—"}</dd>
+            </div>
+          </>
+        ) : null}
+
+        {isTtsNode ? (
+          <>
+            <div>
+              <dt className="font-medium text-slate-500">Provider</dt>
+              <dd>{session.tts?.provider ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Model</dt>
+              <dd>{session.tts?.model ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Voice settings</dt>
+              <dd className="break-all">{session.tts ? JSON.stringify(session.tts.settings) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">First-audio latency</dt>
+              <dd>{session.tts?.firstAudioLatencyMs ?? "—"}ms</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Audio status</dt>
+              <dd>{session.tts?.status ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Fallback reason</dt>
+              <dd>{session.tts?.reason ?? "—"}</dd>
             </div>
           </>
         ) : null}

@@ -1,9 +1,10 @@
-import { synthesizeMockSpeech } from "@/audio/mockAudio";
-import { generateMockResponse } from "@/llm-adapters/mockLlm";
+import { getSpeechSynthesis, playSynthesizedAudio } from "@/audio/ttsAdapter";
+import { getGeneratedResponse } from "@/llm-adapters/responseAdapter";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
+import { buildResponseContext } from "@/orchestration/responseContext";
 import { runToolExecution } from "@/tools/toolRunner";
 import { ToolExecutionMode } from "@/tools/toolTypes";
-import { FlowNodeId, SessionState } from "@/types/session";
+import { FlowNodeId, SessionState, TtsSettingsView } from "@/types/session";
 import { randomBetween } from "@/utils/format";
 
 export interface SimulationOptions {
@@ -18,6 +19,12 @@ export interface SimulationStep {
   run: (state: SessionState) => Promise<SessionState>;
 }
 
+const DEFAULT_TTS_SETTINGS: TtsSettingsView = {
+  voiceStyle: "calm-neutral",
+  speed: 1,
+  streamingEnabled: true
+};
+
 export function buildSimulationSteps(options: SimulationOptions): SimulationStep[] {
   return [
     {
@@ -25,11 +32,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       label: "Speech recognized",
       run: async (state) => {
         const sttMs = randomBetween(300, 700);
-        return {
-          ...state,
-          transcript: state.utterance,
-          latency: { ...state.latency, sttMs }
-        } as SessionState;
+        return { ...state, transcript: state.utterance, latency: { ...state.latency, sttMs } } as SessionState;
       }
     },
     {
@@ -74,11 +77,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
           routing,
           responseText: routing.decision === "clarify" ? routing.clarificationPrompt : state.responseText,
           policy: state.policy
-            ? {
-                ...state.policy,
-                selectedRule: routing.selectedRule,
-                whyChosen: routing.whyChosen
-              }
+            ? { ...state.policy, selectedRule: routing.selectedRule, whyChosen: routing.whyChosen }
             : state.policy
         } as SessionState;
       }
@@ -136,9 +135,13 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       label: "LLM response drafted",
       run: async (state) => {
         const responseMs = randomBetween(250, 700);
+        const context = buildResponseContext(state);
+        const responseGeneration = await getGeneratedResponse(context);
+
         return {
           ...state,
-          responseText: generateMockResponse(state),
+          responseText: responseGeneration.finalResponseText,
+          responseGeneration,
           handoff: runDeterministicHandoffPolicy(state),
           latency: { ...state.latency, responseMs }
         } as SessionState;
@@ -148,11 +151,13 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       id: "tts",
       label: "Speech synthesized",
       run: async (state) => {
-        const ttsMs = randomBetween(150, 400);
-        synthesizeMockSpeech(state.responseText ?? "");
+        const tts = await getSpeechSynthesis(state.responseText ?? "", DEFAULT_TTS_SETTINGS);
+        const playback = await playSynthesizedAudio(tts);
+        const ttsMs = tts.firstAudioLatencyMs || randomBetween(150, 400);
         const totalMs = (state.latency?.sttMs ?? 0) + (state.latency?.understandingMs ?? 0) + (state.latency?.toolMs ?? 0) + (state.latency?.responseMs ?? 0) + ttsMs;
         return {
           ...state,
+          tts: playback.ok ? { ...tts, status: "played" } : { ...tts, status: "fallback", reason: playback.reason ?? tts.reason },
           latency: { ...state.latency, ttsMs, totalMs }
         } as SessionState;
       }

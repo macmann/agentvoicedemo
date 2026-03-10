@@ -68,6 +68,14 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
             <p className="text-slate-600">Tool failures: {session.policy?.counters.toolFailures ?? 0}</p>
             <p className="text-slate-600">Low-confidence turns: {session.policy?.counters.lowConfidence ?? 0}</p>
           </div>
+
+          <div className="rounded border border-slate-200 p-2">
+            <p className="font-medium">Response + TTS</p>
+            <p className="text-slate-600">Response provider: {session.responseGeneration?.provider ?? "—"}</p>
+            <p className="text-slate-600">TTS provider: {session.tts?.provider ?? "—"}</p>
+            <p className="text-slate-600">TTS status: {session.tts?.status ?? "—"}</p>
+            <p className="text-slate-600">TTS reason: {session.tts?.reason ?? "—"}</p>
+          </div>
         </div>
       </div>
     </section>
