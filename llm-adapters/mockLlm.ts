@@ -21,19 +21,19 @@ export function generateMockResponse(state: SessionState): string {
     return "I couldn’t complete that check right now. I can transfer you to a specialist immediately, or keep trying with a simplified diagnostic flow.";
   }
 
-  if (state.toolResult?.toolName === "OutageLookupAPI") {
-    if ((state.toolResult.result as { incidentId?: string } | undefined)?.incidentId) {
+  if (state.toolResult?.toolName === "check_outage_status") {
+    if ((state.toolResult.result as { incident_id?: string } | undefined)?.incident_id) {
       return "I checked your area and there is a confirmed outage (incident INC-44721) with an estimated restoration time of about 2 hours.";
     }
     return "I found a service outage in your area with an estimated restoration time of about 2 hours. I can also send status updates to your phone.";
   }
 
-  if (state.toolResult?.toolName === "DeviceDiagnostics") {
+  if (state.toolResult?.toolName === "diagnose_connectivity") {
     return "Your router’s red blinking light usually indicates a line signal issue. Please power-cycle the router and verify the fiber/cable connection. If it stays red, I can escalate this immediately.";
   }
 
-  if (state.toolResult?.toolName === "AppointmentManager") {
-    return "Done — your technician visit has been rescheduled to tomorrow between 10:00 AM and 12:00 PM. Would you like a confirmation text?";
+  if (state.toolResult?.toolName === "reschedule_technician") {
+    return "Done — your technician visit has been rescheduled to tomorrow between 2:00 PM and 4:00 PM. Would you like a confirmation text?";
   }
 
   return "Thanks for sharing that. I can help with your account issue and guide you through the next best step.";

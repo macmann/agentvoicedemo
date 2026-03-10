@@ -59,8 +59,18 @@ export function SessionSummary({ session }: { session: SessionState }) {
         </div>
         <div>
           <p className="text-slate-500">Tool result</p>
-          <p className="font-medium break-all">{session.toolResult ? `${session.toolResult.toolName}: ${JSON.stringify(session.toolResult.result ?? session.toolResult.error)}` : "—"}</p>
+          <p className="font-medium break-all">{session.toolResult ? `${session.toolResult.provider ?? "unknown"}/${session.toolResult.toolName}: ${JSON.stringify(session.toolResult.result ?? session.toolResult.error)}` : "—"}</p>
         </div>
+
+        <div>
+          <p className="text-slate-500">Tool execution mode</p>
+          <p className="font-medium">{session.toolExecution?.executionMode ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-slate-500">Tool execution status/time</p>
+          <p className="font-medium">{session.toolExecution ? `${session.toolExecution.executionStatus} · ${session.toolExecution.executionTimeMs}ms` : "—"}</p>
+        </div>
+
         <div className="col-span-2">
           <p className="text-slate-500">Final generated response</p>
           <p className="font-medium">{session.responseText ?? "—"}</p>

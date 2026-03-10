@@ -8,6 +8,7 @@ import { NodeDetailPanel } from "@/components/demo/NodeDetailPanel";
 import { SessionSummary } from "@/components/demo/SessionSummary";
 import { sampleUtterances } from "@/mock-data/utterances";
 import { SimulationOptions } from "@/orchestration/simulateSession";
+import { ToolExecutionMode } from "@/tools/toolTypes";
 import { useSessionSimulator } from "@/state/useSessionSimulator";
 import { FlowNodeId } from "@/types/session";
 
@@ -16,9 +17,10 @@ export function VoiceAiDemoApp() {
   const [stepMode, setStepMode] = useState(false);
   const [forceFallback, setForceFallback] = useState(false);
   const [workflowMode, setWorkflowMode] = useState<"auto" | "workflow" | "no_workflow">("auto");
+  const [toolMode, setToolMode] = useState<ToolExecutionMode>("mock");
   const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, runAll, reset, setSession, traversedEdges } = useSessionSimulator(sampleUtterances[0]);
 
-  const options: SimulationOptions = { forceFallback, workflowMode };
+  const options: SimulationOptions = { forceFallback, workflowMode, toolMode };
 
   const handleRun = async () => {
     if (stepMode) {
@@ -56,6 +58,8 @@ export function VoiceAiDemoApp() {
             onStepModeChange={setStepMode}
             onForceFallbackChange={setForceFallback}
             onWorkflowModeChange={setWorkflowMode}
+            toolMode={toolMode}
+            onToolModeChange={setToolMode}
             onRun={handleRun}
             onNext={handleNext}
             onReset={() => reset(session.utterance)}

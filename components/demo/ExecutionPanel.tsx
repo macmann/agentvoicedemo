@@ -53,6 +53,15 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
             <p className="text-slate-600">STT-failure escalation: {session.policy?.thresholds.sttFailureEscalationCount ?? "—"}</p>
           </div>
 
+
+          <div className="rounded border border-slate-200 p-2">
+            <p className="font-medium">Tool execution</p>
+            <p className="text-slate-600">Tool: {session.toolExecution?.selectedTool ?? "—"}</p>
+            <p className="text-slate-600">Mode: {session.toolExecution?.executionMode ?? "—"}</p>
+            <p className="text-slate-600">Status: {session.toolExecution?.executionStatus ?? "—"}</p>
+            <p className="text-slate-600">Error: {session.toolExecution?.errorMessage ?? "—"}</p>
+          </div>
+
           <div className="rounded border border-slate-200 p-2">
             <p className="font-medium">Retry counters</p>
             <p className="text-slate-600">STT failures: {session.policy?.counters.sttFailures ?? 0}</p>

@@ -43,6 +43,19 @@ export interface UnderstandingDiagnostics {
   fallbackBehavior: string;
 }
 
+
+export interface ToolExecutionView {
+  selectedTool: "diagnose_connectivity" | "check_outage_status" | "reschedule_technician" | "create_support_ticket";
+  requestPayload: Record<string, unknown>;
+  responsePayload?: Record<string, unknown>;
+  executionStatus: "success" | "failure";
+  executionTimeMs: number;
+  executionMode: "mock" | "api";
+  endpoint?: string;
+  fallbackBehavior?: string;
+  errorMessage?: string;
+}
+
 export interface SessionState {
   utterance: string;
   transcript?: string;
@@ -61,10 +74,12 @@ export interface SessionState {
     clarificationReason?: string;
     handoffReason?: string;
   };
+  toolExecution?: ToolExecutionView;
   toolResult?: {
+    provider?: "mock_local" | "api";
     toolName: string;
     status: "success" | "failure";
-    result?: Record<string, unknown>;
+    result?: unknown;
     error?: string;
   };
   responseText?: string;

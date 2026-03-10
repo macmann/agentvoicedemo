@@ -37,7 +37,7 @@ export const nodeCatalog: NodeDetails[] = [
     purpose: "Execute backend checks (e.g., outage lookup, appointment update) with strict schemas.",
     input: "Workflow + entities",
     output: "Tool payload success/failure",
-    parameters: ["retry=1", "timeoutMs=1200", "idempotencyKey=sessionId"],
+    parameters: ["mode=mock|api", "registry=typed-tools-v1", "timeoutMs=1500", "fallback=create_support_ticket|handoff"],
     latencyEstimate: "100-1200ms",
     fallbackBehavior: "Return graceful degradation response and optionally queue handoff."
   },
