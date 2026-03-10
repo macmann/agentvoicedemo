@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useMemo, useRef, useState } from "react";
 import { buildSimulationSteps, SimulationOptions } from "@/orchestration/simulateSession";
 import { DemoLogEvent, FlowNodeId, NodeVisualState, SessionState } from "@/types/session";
 
@@ -16,6 +16,7 @@ const defaultNodeStates: Record<FlowNodeId, NodeVisualState> = {
 
 export function useSessionSimulator(initialUtterance: string) {
   const [session, setSession] = useState<SessionState>({ utterance: initialUtterance });
+  const sessionRef = useRef<SessionState>({ utterance: initialUtterance });
   const [nodeStates, setNodeStates] = useState(defaultNodeStates);
   const [logs, setLogs] = useState<DemoLogEvent[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -24,8 +25,19 @@ export function useSessionSimulator(initialUtterance: string) {
 
   const activeSteps = useMemo(() => buildSimulationSteps({ forceFallback: false, workflowMode: "auto" }), []);
 
+  const setSessionState: Dispatch<SetStateAction<SessionState>> = (value) => {
+    setSession((prev) => {
+      const next = typeof value === "function" ? (value as (prev: SessionState) => SessionState)(prev) : value;
+      sessionRef.current = next;
+      return next;
+    });
+  };
+
+
   const reset = (utterance: string) => {
-    setSession({ utterance });
+    const resetSession = { utterance };
+    sessionRef.current = resetSession;
+    setSessionState(resetSession);
     setNodeStates(defaultNodeStates);
     setLogs([]);
     setStepIndex(0);
@@ -51,13 +63,13 @@ export function useSessionSimulator(initialUtterance: string) {
       return;
     }
 
-    if (step.id === "toolExecution" && session.routing?.decision === "clarify") {
+    if (step.id === "toolExecution" && sessionRef.current.routing?.decision === "clarify") {
       setNodeStates((prev) => ({ ...prev, decision: "fallback", toolExecution: "idle" }));
       setLogs((logPrev) => [
         {
           id: `${Date.now()}-clarify-stop`,
           stage: "Routing clarify stop",
-          message: `Stopped before tool execution: ${session.routing?.clarificationReason ?? "clarification requested"}`,
+          message: `Stopped before tool execution: ${sessionRef.current.routing?.clarificationReason ?? "clarification requested"}`,
           timestamp: new Date().toLocaleTimeString()
         },
         ...logPrev
@@ -81,8 +93,9 @@ export function useSessionSimulator(initialUtterance: string) {
 
     let nextSession: SessionState | undefined;
 
-    setSession((prev) => {
+    setSessionState((prev) => {
       const next = step.run(prev);
+      sessionRef.current = next;
       nextSession = next;
       setNodeStates((nodePrev) => ({
         ...nodePrev,
@@ -135,6 +148,6 @@ export function useSessionSimulator(initialUtterance: string) {
     applyStep,
     runAll,
     reset,
-    setSession
+    setSession: setSessionState
   };
 }
