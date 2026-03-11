@@ -60,3 +60,15 @@ export interface TesterConversationState {
   messages: TesterMessage[];
   status: TurnStatus;
 }
+
+export interface TesterSttState {
+  interimTranscript: string;
+  finalTranscript: string;
+  isListening: boolean;
+  isSpeechDetected: boolean;
+  silenceMs: number;
+  autoSubmitted: boolean;
+  recordingStartedAt?: number;
+  lastSpeechAt?: number;
+  providerMode: "webspeech_streaming" | "unsupported";
+}

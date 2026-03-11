@@ -5,7 +5,7 @@ import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapt
 import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
 import { SessionState } from "@/types/session";
-import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterTurnRecord, TurnStatus } from "@/types/tester";
+import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus } from "@/types/tester";
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -18,6 +18,16 @@ const initialConversation = (): TesterConversationState => ({
   status: "idle"
 });
 
+const initialSttState = (): TesterSttState => ({
+  interimTranscript: "",
+  finalTranscript: "",
+  isListening: false,
+  isSpeechDetected: false,
+  silenceMs: 0,
+  autoSubmitted: false,
+  providerMode: "webspeech_streaming"
+});
+
 export function useVoiceTester() {
   const [conversation, setConversation] = useState<TesterConversationState>(() => initialConversation());
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(true);
@@ -25,13 +35,47 @@ export function useVoiceTester() {
   const [isDebugOpen, setIsDebugOpen] = useState(true);
   const [lastSession, setLastSession] = useState<SessionState>();
   const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>("idle");
+  const [sttState, setSttState] = useState<TesterSttState>(() => initialSttState());
   const capturePromise = useRef<ReturnType<typeof startMicrophoneCapture>["result"] | null>(null);
+  const draftMessageId = useRef<string | null>(null);
+  const hasSubmittedCapture = useRef(false);
 
   const appendMessage = (message: TesterMessage) => {
     setConversation((prev) => ({ ...prev, messages: [...prev.messages, message] }));
   };
 
   const setStatus = (status: TurnStatus) => setConversation((prev) => ({ ...prev, status }));
+
+  const upsertDraftMessage = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    setConversation((prev) => {
+      if (!draftMessageId.current) {
+        const draftId = id("msg");
+        draftMessageId.current = draftId;
+        return {
+          ...prev,
+          messages: [
+            ...prev.messages,
+            { id: draftId, role: "system", text: `Hearing you… ${trimmed}`, createdAt: new Date().toISOString(), status: "listening" }
+          ]
+        };
+      }
+
+      return {
+        ...prev,
+        messages: prev.messages.map((msg) => (msg.id === draftMessageId.current ? { ...msg, text: `Hearing you… ${trimmed}` } : msg))
+      };
+    });
+  };
+
+  const clearDraftMessage = () => {
+    if (!draftMessageId.current) return;
+    const draftId = draftMessageId.current;
+    setConversation((prev) => ({ ...prev, messages: prev.messages.filter((msg) => msg.id !== draftId) }));
+    draftMessageId.current = null;
+  };
 
   const runTurn = async (text: string, source: TesterInputSource, sttCapture?: SessionState["sttCapture"]) => {
     if (!text.trim() && source === "text") return;
@@ -93,17 +137,6 @@ export function useVoiceTester() {
       setLastSession(output.session);
       setConversation((prev) => ({ ...prev, turns: [...prev.turns, turn] }));
 
-      if (output.transcriptText && output.transcriptText !== optimisticUserText) {
-        appendMessage({
-          id: id("msg"),
-          role: "system",
-          text: `Transcript: ${output.transcriptText}`,
-          createdAt: output.createdAt,
-          turnId: userTurnId,
-          status: "thinking"
-        });
-      }
-
       appendMessage({
         id: id("msg"),
         role: "assistant",
@@ -142,6 +175,51 @@ export function useVoiceTester() {
     }
   };
 
+  const finalizeListening = async ({ autoSubmitted }: { autoSubmitted: boolean }) => {
+    if (!capturePromise.current || hasSubmittedCapture.current) return;
+    hasSubmittedCapture.current = true;
+
+    const result = await capturePromise.current;
+    capturePromise.current = null;
+
+    setSttState((prev) => ({
+      ...prev,
+      isListening: false,
+      autoSubmitted,
+      finalTranscript: result.transcript.trim() || prev.finalTranscript,
+      interimTranscript: ""
+    }));
+
+    clearDraftMessage();
+
+    const transcript = result.transcript.trim();
+    if (!transcript) {
+      appendMessage({
+        id: id("msg"),
+        role: "system",
+        text: result.reason ?? "No speech detected. Try again or use text input.",
+        createdAt: new Date().toISOString(),
+        status: "error"
+      });
+      setStatus("idle");
+      return;
+    }
+
+    if (transcript.length < 2) {
+      appendMessage({
+        id: id("msg"),
+        role: "system",
+        text: "Captured utterance was too short. Please try again.",
+        createdAt: new Date().toISOString(),
+        status: "error"
+      });
+      setStatus("idle");
+      return;
+    }
+
+    await runTurn(transcript, "microphone", result);
+  };
+
   const startListening = async () => {
     if (isProcessing) return;
     const permission = await requestMicrophonePermission();
@@ -157,11 +235,38 @@ export function useVoiceTester() {
       return;
     }
 
+    hasSubmittedCapture.current = false;
     setStatus("listening");
-    const capture = startMicrophoneCapture();
+    setSttState({
+      ...initialSttState(),
+      isListening: true,
+      recordingStartedAt: Date.now(),
+      providerMode: "webspeech_streaming"
+    });
+
+    const capture = startMicrophoneCapture({
+      silenceThresholdMs: 1000,
+      onInterimTranscript: (interimTranscript) => {
+        setSttState((prev) => ({ ...prev, interimTranscript }));
+        upsertDraftMessage(interimTranscript);
+      },
+      onFinalTranscript: (finalTranscript) => {
+        setSttState((prev) => ({ ...prev, finalTranscript }));
+        upsertDraftMessage(finalTranscript);
+      },
+      onSpeechState: ({ isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }) => {
+        setSttState((prev) => ({ ...prev, isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }));
+      },
+      onAutoSubmit: () => {
+        setStatus("thinking");
+        void finalizeListening({ autoSubmitted: true });
+      }
+    });
+
     capturePromise.current = capture.result;
     if (!capture.ok) {
       const result = await capture.result;
+      setSttState((prev) => ({ ...prev, providerMode: "unsupported", isListening: false }));
       appendMessage({
         id: id("msg"),
         role: "system",
@@ -170,29 +275,13 @@ export function useVoiceTester() {
         status: "error"
       });
       setStatus("error");
-      return;
     }
   };
 
   const stopListening = async () => {
     if (!capturePromise.current) return;
     stopMicrophoneCapture();
-    const result = await capturePromise.current;
-    capturePromise.current = null;
-
-    if (!result.transcript.trim()) {
-      appendMessage({
-        id: id("msg"),
-        role: "system",
-        text: result.reason ?? "No transcript captured. Try again or use text input.",
-        createdAt: new Date().toISOString(),
-        status: "error"
-      });
-      setStatus("idle");
-      return;
-    }
-
-    await runTurn(result.transcript, "microphone", result);
+    await finalizeListening({ autoSubmitted: false });
   };
 
   const replayLastAudio = async () => {
@@ -210,9 +299,12 @@ export function useVoiceTester() {
 
   const resetConversation = () => {
     stopSynthesizedAudio();
+    stopMicrophoneCapture();
+    clearDraftMessage();
     setConversation(initialConversation());
     setLastSession(undefined);
     setPlaybackStatus("idle");
+    setSttState(initialSttState());
   };
 
   const latestTurn = useMemo(() => conversation.turns[conversation.turns.length - 1], [conversation.turns]);
@@ -226,6 +318,7 @@ export function useVoiceTester() {
     isDebugOpen,
     setIsDebugOpen,
     playbackStatus,
+    sttState,
     runTurn,
     startListening,
     stopListening,
