@@ -1,4 +1,4 @@
-import { detectTurnAct } from "@/orchestration/conversationPolicy";
+import { CONVERSATIONAL_STRATEGIES, detectTurnAct } from "@/orchestration/conversationPolicy";
 import { parseScenarioSignals } from "@/orchestration/mockScenarios";
 import { ROUTING_CONFIG, UnderstoodIntent } from "@/orchestration/routingConfig";
 import { StructuredUnderstandingResult, UnderstandingDiagnostics } from "@/types/session";
@@ -15,7 +15,7 @@ function buildSystemPrompt() {
     "Classify the user into one of the known intents only:",
     KNOWN_INTENTS.join(", "),
     "Extract entities as Record<string,string>.",
-    "Schema requires: intent,intentConfidence,entities,empathyNeeded,workflowRequired,recommendedWorkflow,handoffRecommended,turnAct,responseStrategy,refersToPendingQuestion,resetPendingQuestion,replacePendingWorkflow,reason.",
+    "Schema requires: intent,intentConfidence,entities,empathyNeeded,workflowRequired,recommendedWorkflow,handoffRecommended,turnAct,responseStrategy,responseMode,refersToPendingQuestion,resetPendingQuestion,replacePendingWorkflow,reason.",
     JSON.stringify({
       intent: "string",
       intentConfidence: 0,
@@ -27,6 +27,7 @@ function buildSystemPrompt() {
       handoffRecommended: false,
       turnAct: "greeting|small_talk|thanks|farewell|task_request|slot_answer|correction|objection|emotion|meta_question|handoff_request|unclear",
       responseStrategy: "greet_and_invite|small_talk_and_invite|acknowledge_thanks|farewell_close|continue_workflow|ask_clarification|repair_and_reset|empathy_then_continue|explain_and_continue|replace_workflow|handoff|bounded_redirect",
+      responseMode: "conversational_only|task_oriented",
       refersToPendingQuestion: false,
       resetPendingQuestion: false,
       replacePendingWorkflow: false,
@@ -52,6 +53,7 @@ function sanitizeUnderstanding(candidate: unknown, utterance: string): { underst
   const reason = typeof obj.reason === "string" ? obj.reason : undefined;
   const turnAct = typeof obj.turnAct === "string" ? obj.turnAct : detectTurnAct(utterance, false);
   const responseStrategy = typeof obj.responseStrategy === "string" ? obj.responseStrategy : "continue_workflow";
+  const responseMode = typeof obj.responseMode === "string" ? obj.responseMode : CONVERSATIONAL_STRATEGIES.includes(responseStrategy as StructuredUnderstandingResult["responseStrategy"]) ? "conversational_only" : "task_oriented";
 
   const maybeRoute = ROUTING_CONFIG[intent];
   const normalizedWorkflow = workflowRequired ? recommendedWorkflow ?? maybeRoute.workflowName : undefined;
@@ -67,6 +69,7 @@ function sanitizeUnderstanding(candidate: unknown, utterance: string): { underst
     handoffRecommended,
     turnAct: turnAct as StructuredUnderstandingResult["turnAct"],
     responseStrategy: responseStrategy as StructuredUnderstandingResult["responseStrategy"],
+    responseMode: responseMode as StructuredUnderstandingResult["responseMode"],
     refersToPendingQuestion: Boolean(obj.refersToPendingQuestion),
     resetPendingQuestion: Boolean(obj.resetPendingQuestion),
     replacePendingWorkflow: Boolean(obj.replacePendingWorkflow),
@@ -92,6 +95,7 @@ function mockUnderstanding(utterance: string): StructuredUnderstandingResult {
     handoffRecommended: signals.explicitHumanRequest,
     turnAct,
     responseStrategy: turnAct === "greeting" ? "greet_and_invite" : turnAct === "small_talk" ? "small_talk_and_invite" : route.decision === "clarify" ? "ask_clarification" : "continue_workflow",
+    responseMode: CONVERSATIONAL_STRATEGIES.includes(turnAct === "greeting" ? "greet_and_invite" : turnAct === "small_talk" ? "small_talk_and_invite" : route.decision === "clarify" ? "ask_clarification" : "continue_workflow") ? "conversational_only" : "task_oriented",
     refersToPendingQuestion: false,
     resetPendingQuestion: false,
     replacePendingWorkflow: false,

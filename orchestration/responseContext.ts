@@ -13,6 +13,10 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
     originalUtterance: state.utterance,
     sentiment: state.understanding?.sentiment,
     empathyNeeded: Boolean(state.understanding?.empathyNeeded),
+    turnAct: state.understanding?.turnAct,
+    responseStrategy: state.understanding?.responseStrategy,
+    responseMode: state.understanding?.responseMode ?? "task_oriented",
+    hasPendingQuestion: Boolean(state.conversation?.pendingQuestion),
     workflowPath: state.routing?.decision ?? "no_workflow",
     workflowResult,
     handoffState: state.handoff?.triggered
@@ -26,6 +30,6 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
       ? `Pending workflow ${pending.workflowName} (${pending.status}); missing slots: ${pending.missingSlots.join(", ") || "none"}; collected: ${JSON.stringify(pending.collectedSlots)}`
       : "No pending workflow.",
     policyInstructions:
-      "Keep one main message, remain calm/helpful/empathetic, stay grounded to provided context only, and do not invent unsupported facts."
+      "Use responseMode and responseStrategy. For conversational_only responses be brief, natural, and ask at most one next-step question. For task_oriented responses stay precise and grounded to provided context only."
   };
 }

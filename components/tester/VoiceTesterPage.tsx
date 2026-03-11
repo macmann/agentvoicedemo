@@ -154,6 +154,8 @@ export function VoiceTesterPage() {
             <div><strong>Intent:</strong> {latestTurn?.metadata.intent ?? "-"}</div>
             <div><strong>Turn act:</strong> {latestTurn?.metadata.turnAct ?? "-"}</div>
             <div><strong>Response strategy:</strong> {latestTurn?.metadata.responseStrategy ?? "-"}</div>
+            <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
+            <div><strong>Response mode:</strong> {latestTurn?.metadata.responseMode ?? "-"}</div>
             <div><strong>Refers to pending question:</strong> {String(latestTurn?.metadata.refersToPendingQuestion ?? false)}</div>
             <div><strong>Reset pending question:</strong> {String(latestTurn?.metadata.resetPendingQuestion ?? false)}</div>
             <div><strong>Replace pending workflow:</strong> {String(latestTurn?.metadata.replacePendingWorkflow ?? false)}</div>

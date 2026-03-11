@@ -296,7 +296,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   const responseText = state.handoff?.triggered
     ? `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
-    : strategyText && ["greet_and_invite", "small_talk_and_invite", "acknowledge_thanks", "farewell_close", "repair_and_reset", "explain_and_continue", "bounded_redirect"].includes(state.understanding?.responseStrategy ?? "")
+    : strategyText && state.understanding?.responseMode === "conversational_only"
       ? strategyText
       : answeredPendingQuestion && pendingQuestionContext?.expectedSlot && slotResolutionResult?.normalizedValue
         ? `${buildSlotFillAcknowledgement(pendingQuestionContext.expectedSlot, slotResolutionResult.normalizedValue)} ${groundedToolResponse ?? responseGeneration.finalResponseText}`
@@ -420,6 +420,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       dialogueState: state.routing?.dialogueState,
       turnAct: state.understanding?.turnAct,
       responseStrategy: state.understanding?.responseStrategy,
+      responseMode: state.understanding?.responseMode,
       refersToPendingQuestion: state.understanding?.refersToPendingQuestion,
       resetPendingQuestion: state.understanding?.resetPendingQuestion,
       replacePendingWorkflow: state.understanding?.replacePendingWorkflow,
