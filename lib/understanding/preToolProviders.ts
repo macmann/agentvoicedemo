@@ -4,6 +4,7 @@ import { PreToolUnderstandingDiagnostics, PreToolUnderstandingResult } from "@/t
 
 const OPENAI_MODEL = process.env.OPENAI_UNDERSTANDING_MODEL ?? "gpt-5-mini";
 const PROMPT_TYPE = "pretool_understanding_v1" as const;
+const PRETOOL_PROVIDER = process.env.OPENAI_PRETOOL_PROVIDER ?? "mock";
 
 type Input = {
   utterance: string;
@@ -284,5 +285,13 @@ export async function getPreToolUnderstandingOpenAI(input: Input) {
 }
 
 export async function getPreToolUnderstanding(input: Input) {
+  if (PRETOOL_PROVIDER !== "openai") {
+    return getPreToolUnderstandingMock(
+      input,
+      "Pre-tool OpenAI provider disabled; using mock pre-tool understanding.",
+      `Pre-tool provider set to '${PRETOOL_PROVIDER}'; OpenAI disabled for this node.`
+    );
+  }
+
   return getPreToolUnderstandingOpenAI(input);
 }
