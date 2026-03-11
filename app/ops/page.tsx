@@ -1,10 +1,10 @@
-import { VoiceTesterPage } from "@/components/tester/VoiceTesterPage";
+import { OpsQaDashboard } from "@/components/ops/OpsQaDashboard";
 import { DashboardRuntimeProvider } from "@/state/useDashboardRuntimeConfig";
 
-export default function TesterPage() {
+export default function OpsPage() {
   return (
     <DashboardRuntimeProvider>
-      <VoiceTesterPage />
+      <OpsQaDashboard />
     </DashboardRuntimeProvider>
   );
 }

@@ -6,9 +6,9 @@ import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
 import { SessionState } from "@/types/session";
 import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus, VoicePhase } from "@/types/tester";
-import { useRuntimeToolConfig } from "@/state/useRuntimeToolConfig";
 import { resolveToolExecutionMode } from "@/tools/runtimeToolConfig";
 import { ToolName } from "@/tools/toolTypes";
+import { useDashboardRuntimeConfig } from "@/state/useDashboardRuntimeConfig";
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -33,7 +33,6 @@ const initialSttState = (): TesterSttState => ({
 
 export function useVoiceTester() {
   const [conversation, setConversation] = useState<TesterConversationState>(() => initialConversation());
-  const [voiceModeEnabled, setVoiceModeEnabled] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(true);
   const [lastSession, setLastSession] = useState<SessionState>();
@@ -42,7 +41,9 @@ export function useVoiceTester() {
   const capturePromise = useRef<ReturnType<typeof startMicrophoneCapture>["result"] | null>(null);
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
-  const { runtimeConfig, setGlobalMode, setPerToolMode, reset: resetToolSettings, perToolOverrides } = useRuntimeToolConfig();
+  const { config, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
+  const runtimeConfig = config.toolConfig;
+  const voiceModeEnabled = config.voiceModeEnabled;
 
   const appendMessage = (message: TesterMessage) => {
     setConversation((prev) => ({ ...prev, messages: [...prev.messages, message] }));
@@ -119,6 +120,7 @@ export function useVoiceTester() {
         runtimeToolConfig: runtimeConfig,
         forceFallback: false,
         voiceModeEnabled,
+        fillerEnabled: config.fillerEnabled,
         onStage: (phase) => {
           setStatus(phaseToStatus[phase]);
           if (phase === "checking_tool" && !announcedToolStage) {
@@ -270,12 +272,14 @@ export function useVoiceTester() {
     });
 
     const capture = startMicrophoneCapture({
-      silenceThresholdMs: 1000,
+      silenceThresholdMs: config.silenceTimeoutMs,
       onInterimTranscript: (interimTranscript) => {
+        if (!config.streamingTranscript) return;
         setSttState((prev) => ({ ...prev, interimTranscript }));
         upsertDraftMessage(interimTranscript);
       },
       onFinalTranscript: (finalTranscript) => {
+        if (!config.streamingTranscript) return;
         setSttState((prev) => ({ ...prev, finalTranscript }));
         upsertDraftMessage(finalTranscript);
       },
@@ -369,6 +373,7 @@ export function useVoiceTester() {
     stopAudio,
     resetConversation,
     runtimeConfig,
+    dashboardConfig: config,
     setGlobalToolMode: setGlobalMode,
     setToolOverrideMode,
     resetToolSettings,

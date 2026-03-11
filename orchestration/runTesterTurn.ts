@@ -114,6 +114,7 @@ export interface RunTesterTurnInput {
   runtimeToolConfig?: RuntimeToolConfig;
   forceFallback: boolean;
   voiceModeEnabled: boolean;
+  fillerEnabled?: boolean;
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -228,7 +229,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   state = { ...state, conversation, routing };
 
-  const shouldUseFiller = Boolean(input.voiceModeEnabled && FILLER_CONFIG.enabled && routing.decision === "workflow" && (!FILLER_CONFIG.onlyForWorkflow || routing.decision === "workflow"));
+  const shouldUseFiller = Boolean(input.voiceModeEnabled && (input.fillerEnabled ?? FILLER_CONFIG.enabled) && routing.decision === "workflow" && (!FILLER_CONFIG.onlyForWorkflow || routing.decision === "workflow"));
   const fillerResponseText = shouldUseFiller ? chooseFillerPhrase(transcriptText) : undefined;
   let fillerTtsFirstAudioMs: number | undefined;
 
