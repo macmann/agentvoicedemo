@@ -121,6 +121,7 @@ export function useVoiceTester() {
         forceFallback: false,
         voiceModeEnabled,
         fillerEnabled: config.fillerEnabled,
+        intentUnderstandingMode: config.intentUnderstandingMode,
         onStage: (phase) => {
           setStatus(phaseToStatus[phase]);
           if (phase === "checking_tool" && !announcedToolStage) {

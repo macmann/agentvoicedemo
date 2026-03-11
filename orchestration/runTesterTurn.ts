@@ -1,5 +1,6 @@
 import { getTranscript } from "@/audio/sttAdapter";
 import { getSpeechSynthesis, playSynthesizedAudio } from "@/audio/ttsAdapter";
+import { getPreToolUnderstandingResult } from "@/llm-adapters/preToolUnderstandingAdapter";
 import { getGeneratedResponse } from "@/llm-adapters/responseAdapter";
 import { deriveConversationState, resolvePendingQuestionAnswer, SlotResolutionResult } from "@/orchestration/conversationState";
 import { buildClarificationPrompt, isSlotNoiseTurnAct, responseForStrategy } from "@/orchestration/conversationPolicy";
@@ -8,7 +9,7 @@ import { buildResponseContext } from "@/orchestration/responseContext";
 import { runToolExecution } from "@/tools/toolRunner";
 import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { ToolExecutionMode } from "@/tools/toolTypes";
-import { PendingQuestionState, SessionState, TtsSettingsView } from "@/types/session";
+import { PendingQuestionState, SessionState, StructuredUnderstandingResult, TtsSettingsView } from "@/types/session";
 import { TesterDebugState, TesterInputSource, VoicePhase } from "@/types/tester";
 
 const DEFAULT_TTS_SETTINGS: TtsSettingsView = {
@@ -115,6 +116,78 @@ function parseFollowupSlots(utterance: string): { serviceNameOrRegion?: string; 
   if (lowered.includes("tomorrow")) result.dateScope = "tomorrow";
 
   return result;
+}
+
+function strategyFromTurnAct(turnAct: StructuredUnderstandingResult["turnAct"]): StructuredUnderstandingResult["responseStrategy"] {
+  if (turnAct === "greeting") return "greet_and_invite";
+  if (turnAct === "small_talk") return "small_talk_and_invite";
+  if (turnAct === "thanks") return "acknowledge_thanks";
+  if (turnAct === "farewell") return "farewell_close";
+  if (turnAct === "meta_question") return "explain_and_continue";
+  if (turnAct === "handoff_request") return "handoff";
+  if (turnAct === "emotion") return "empathy_then_continue";
+  if (turnAct === "correction") return "repair_and_reset";
+  return "continue_workflow";
+}
+
+function mapPreToolToProviderResult(preTool?: SessionState["preToolUnderstanding"], diagnostics?: SessionState["preToolUnderstandingDiagnostics"]): SessionState["understandingProviderResult"] | undefined {
+  if (!preTool || !diagnostics) return undefined;
+  const mappedIntent =
+    preTool.inferredSupportIntent === "service_status"
+      ? "service_status"
+      : preTool.inferredSupportIntent === "announcements"
+        ? "announcements"
+        : "unclear";
+  const responseStrategy = preTool.clarificationNeeded ? "ask_clarification" : strategyFromTurnAct(preTool.turnAct);
+  const entities: Record<string, string> = {
+    ...(preTool.entities.serviceNameOrRegion ? { serviceNameOrRegion: preTool.entities.serviceNameOrRegion } : {}),
+    ...(preTool.entities.region ? { region: preTool.entities.region } : {}),
+    ...(preTool.entities.category ? { serviceCategory: preTool.entities.category } : {}),
+    ...(preTool.entities.dateRange ? { dateRange: preTool.entities.dateRange } : {})
+  };
+
+  return {
+    understanding: {
+      intent: mappedIntent,
+      intentConfidence: preTool.intentConfidence,
+      entities,
+      empathyNeeded: false,
+      workflowRequired: mappedIntent === "service_status" || mappedIntent === "announcements",
+      recommendedWorkflow:
+        preTool.suggestedWorkflow ??
+        (mappedIntent === "service_status" ? "check_outage_status" : mappedIntent === "announcements" ? "fetch_notifications" : undefined),
+      handoffRecommended: preTool.handoffRecommended,
+      turnAct: preTool.turnAct,
+      responseStrategy,
+      responseMode: responseStrategy === "greet_and_invite" || responseStrategy === "small_talk_and_invite" || responseStrategy === "acknowledge_thanks" || responseStrategy === "farewell_close" || responseStrategy === "explain_and_continue" || responseStrategy === "repair_and_reset" ? "conversational_only" : "task_oriented",
+      refersToPendingQuestion: preTool.continuationDetected,
+      resetPendingQuestion: false,
+      replacePendingWorkflow: false,
+      reason: preTool.reason
+    },
+    diagnostics: {
+      provider: diagnostics.provider,
+      model: diagnostics.model,
+      promptType: "structured_intent_v1",
+      rawOutput: diagnostics.rawOutput,
+      validationStatus: diagnostics.validationStatus,
+      fallbackBehavior: diagnostics.fallbackBehavior
+    }
+  };
+}
+
+function isScopeSafeClarification(prompt?: string): boolean {
+  if (!prompt) return false;
+  const lowered = prompt.toLowerCase();
+  return (
+    lowered.includes("region") ||
+    lowered.includes("city") ||
+    lowered.includes("service") ||
+    lowered.includes("ftth") ||
+    lowered.includes("cable") ||
+    lowered.includes("announcement") ||
+    lowered.includes("status")
+  );
 }
 
 function isIntentResetOrSwitch(text: string): boolean {
@@ -289,6 +362,7 @@ export interface RunTesterTurnInput {
   forceFallback: boolean;
   voiceModeEnabled: boolean;
   fillerEnabled?: boolean;
+  intentUnderstandingMode?: "deterministic" | "llm_assisted";
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -337,8 +411,49 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const pendingQuestionContext = input.previousSession?.conversation?.pendingQuestion;
 
   input.onStage?.("processing");
+  const intentUnderstandingMode = input.intentUnderstandingMode ?? "deterministic";
+  let preToolUnderstandingMs = 0;
+  let preTool = input.previousSession?.preToolUnderstanding;
+  let preToolDiagnostics = input.previousSession?.preToolUnderstandingDiagnostics;
+
+  if (intentUnderstandingMode === "llm_assisted") {
+    const preToolStart = Date.now();
+    const preToolResult = await getPreToolUnderstandingResult({
+      utterance: transcriptText,
+      recentConversation: (input.previousSession?.conversation?.turns ?? []).slice(-6).map((turn) => ({ role: turn.role, text: turn.text })),
+      activeSupportIntent: input.previousSession?.conversation?.activeSupportIntent,
+      pendingQuestion: input.previousSession?.conversation?.pendingQuestion
+        ? {
+            expectedSlot: input.previousSession.conversation.pendingQuestion.expectedSlot,
+            prompt: input.previousSession.conversation.pendingQuestion.prompt
+          }
+        : undefined,
+      pendingWorkflow: input.previousSession?.conversation?.pendingWorkflow
+        ? {
+            workflowName: input.previousSession.conversation.pendingWorkflow.workflowName,
+            missingSlots: input.previousSession.conversation.pendingWorkflow.missingSlots
+          }
+        : undefined,
+      previousToolContext: input.previousSession?.toolExecution
+        ? {
+            toolName: input.previousSession.toolExecution.selectedTool,
+            normalizedResult: input.previousSession.toolExecution.normalizedResult
+          }
+        : undefined
+    });
+    preToolUnderstandingMs = Date.now() - preToolStart;
+    preTool = preToolResult.understanding;
+    preToolDiagnostics = preToolResult.diagnostics;
+  }
+
   const understandingStart = Date.now();
-  const evaluated = runDeterministicUnderstandingPolicy(transcriptText, { workflowMode: input.workflowMode, pendingQuestion: pendingQuestionContext, pendingWorkflowName: input.previousSession?.conversation?.pendingWorkflow?.workflowName }, input.previousSession?.policy?.counters);
+  const providerResult = mapPreToolToProviderResult(preTool, preToolDiagnostics);
+  const evaluated = runDeterministicUnderstandingPolicy(
+    transcriptText,
+    { workflowMode: input.workflowMode, pendingQuestion: pendingQuestionContext, pendingWorkflowName: input.previousSession?.conversation?.pendingWorkflow?.workflowName },
+    input.previousSession?.policy?.counters,
+    intentUnderstandingMode === "llm_assisted" ? providerResult : undefined
+  );
   const understandingMs = Date.now() - understandingStart;
 
   const turnAct = evaluated.understanding.turnAct;
@@ -349,8 +464,14 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     activeSupportIntent: previousActiveSupportIntent,
     pendingQuestion: pendingQuestionContext
   });
+  const combinedContinuationDetected = continuation.continuationDetected || Boolean(preTool?.continuationDetected || preTool?.correctionDetected);
+  const preToolSlots = {
+    ...(preTool?.entities.serviceNameOrRegion ? { serviceNameOrRegion: preTool.entities.serviceNameOrRegion } : {}),
+    ...(preTool?.entities.category ? { serviceCategory: preTool.entities.category } : {}),
+    ...(preTool?.entities.dateRange ? { dateScope: preTool.entities.dateRange } : {})
+  };
 
-  const adjustedUnderstanding = continuation.continuationDetected && previousActiveSupportIntent
+  const adjustedUnderstanding = combinedContinuationDetected && previousActiveSupportIntent
     ? {
         ...evaluated.understanding,
         intent: previousActiveSupportIntent,
@@ -360,7 +481,8 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
         requestType: continuation.requestType,
         entities: {
           ...evaluated.understanding.entities,
-          ...continuation.correctedSlots
+          ...continuation.correctedSlots,
+          ...preToolSlots
         }
       }
     : evaluated.understanding;
@@ -389,7 +511,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const slotResolutionResult: SlotResolutionResult | undefined = awaitingPendingAnswer ? resolvePendingQuestionAnswer(transcriptText, pendingQuestionContext) : undefined;
   const answeredPendingQuestion = Boolean(slotResolutionResult?.matched && slotResolutionResult.confidence !== "low");
 
-  state = { ...state, understanding, understandingDiagnostics: evaluated.understandingDiagnostics, policy: evaluated.policy };
+  state = { ...state, understanding, understandingDiagnostics: evaluated.understandingDiagnostics, preToolUnderstanding: intentUnderstandingMode === "llm_assisted" ? preTool : undefined, preToolUnderstandingDiagnostics: intentUnderstandingMode === "llm_assisted" ? preToolDiagnostics : undefined, policy: evaluated.policy };
 
   const routingStart = Date.now();
   const baseRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
@@ -416,6 +538,13 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   }
   else if (!pendingQuestion && inferredPendingFromRouting) pendingQuestion = inferredPendingFromRouting;
 
+  const llmClarificationPrompt =
+    intentUnderstandingMode === "llm_assisted" &&
+    preTool?.clarificationNeeded &&
+    isScopeSafeClarification(preTool.clarificationQuestion)
+      ? preTool.clarificationQuestion
+      : undefined;
+
   const nextWorkflowName = understanding.replacePendingWorkflow
     ? baseRouting.workflowName ?? null
     : continuePending
@@ -437,6 +566,9 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   });
 
   let routing: NonNullable<SessionState["routing"]> = { ...baseRouting, dialogueState: "responding" };
+  if (routing.decision === "clarify" && llmClarificationPrompt) {
+    routing = { ...routing, clarificationPrompt: llmClarificationPrompt };
+  }
   let resolutionMode: "answer_to_pending_question" | "fresh_intent_turn" | "support_task_continuation" | "support_task_correction" = continuation.requestType ?? "fresh_intent_turn";
 
   if (conversation.pendingWorkflow && (continuePending || conversation.pendingWorkflow.missingSlots.length > 0)) {
@@ -448,7 +580,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     } else if (conversation.pendingWorkflow.attempts >= 3 && conversation.pendingWorkflow.missingSlots.length > 0) {
       routing = { decision: "handoff", workflowName: conversation.pendingWorkflow.workflowName, selectedRule: "pending_slot_attempts_exceeded", whyChosen: "Unable to collect required slot values after repeated turns.", handoffReason: "slot_filling_attempts_exceeded", dialogueState: "handoff" };
     } else if (conversation.pendingWorkflow.missingSlots.length > 0) {
-      const activePrompt = pendingQuestion?.prompt ?? buildClarificationPrompt(conversation.pendingWorkflow.missingSlots[0], pendingQuestion?.retryCount ?? 0);
+      const activePrompt = llmClarificationPrompt ?? pendingQuestion?.prompt ?? buildClarificationPrompt(conversation.pendingWorkflow.missingSlots[0], pendingQuestion?.retryCount ?? 0);
       routing = { decision: "clarify", workflowName: conversation.pendingWorkflow.workflowName, selectedRule: awaitingPendingAnswer ? "pending_question_retry" : "slot_fill_required_before_workflow", whyChosen: `Pending workflow requires missing slots: ${conversation.pendingWorkflow.missingSlots.join(", ")}`, clarificationPrompt: activePrompt, clarificationReason: awaitingPendingAnswer ? "pending_answer_not_resolved" : "missing_required_slot", dialogueState: "awaiting_missing_info" };
     } else {
       routing = { decision: "workflow", workflowName: conversation.pendingWorkflow.workflowName, selectedRule: "pending_workflow_continuation", whyChosen: "Previously pending workflow now has required slots and can continue.", dialogueState: "ready_to_execute" };
@@ -488,13 +620,13 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
           questionType: "service_category",
           expectedSlot: "serviceCategory",
           workflowName: "check_outage_status" as const,
-          prompt: toolClarification?.pendingQuestionPrompt ?? buildClarificationPrompt("serviceCategory", state.conversation.pendingQuestion?.retryCount ?? 0),
+          prompt: llmClarificationPrompt ?? toolClarification?.pendingQuestionPrompt ?? buildClarificationPrompt("serviceCategory", state.conversation.pendingQuestion?.retryCount ?? 0),
           askedAtTurnId: state.conversation.turns[state.conversation.turns.length - 1]?.id,
           retryCount: state.conversation.pendingQuestion?.expectedSlot === "serviceCategory" ? state.conversation.pendingQuestion.retryCount : 0
         }
       : undefined;
 
-    const toolPrompt = toolClarification?.pendingQuestionPrompt ?? buildClarificationPrompt("serviceCategory", 0);
+    const toolPrompt = llmClarificationPrompt ?? toolClarification?.pendingQuestionPrompt ?? buildClarificationPrompt("serviceCategory", 0);
 
     state = {
       ...state,
@@ -661,6 +793,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     latency: {
       sttFinalizationMs,
       understandingMs,
+      preToolUnderstandingMs: intentUnderstandingMode === "llm_assisted" ? preToolUnderstandingMs : 0,
       routingPolicyMs,
       toolExecutionMs,
       responseGenerationMs,
@@ -703,10 +836,12 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     fillerResponseText,
     metadata: {
       intent: state.understanding?.intent,
+      intentUnderstandingMode,
+      intentModeLabel: intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic",
       supportIntent: state.conversation?.activeSupportIntent ?? (state.understanding?.intent === "service_status" ? "service_status" : state.understanding?.intent === "announcements" ? "announcements" : "none"),
       supportRequestType: state.understanding?.requestType ?? "conversational_or_meta",
       activeSupportIntent: state.conversation?.activeSupportIntent,
-      continuationDetected: continuation.continuationDetected,
+      continuationDetected: combinedContinuationDetected,
       correctedSlots: continuation.correctedSlots,
       previousToolContext: input.previousSession?.toolExecution
         ? {
@@ -723,6 +858,17 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
             : "reset",
       outOfScopeDemoRequest: state.understanding?.intent === "unsupported_support",
       entities: state.understanding?.entities,
+      preToolProvider: state.preToolUnderstandingDiagnostics?.provider,
+      preToolModel: state.preToolUnderstandingDiagnostics?.model,
+      preToolInferredSupportIntent: state.preToolUnderstanding?.inferredSupportIntent,
+      preToolTurnAct: state.preToolUnderstanding?.turnAct,
+      preToolClarificationNeeded: state.preToolUnderstanding?.clarificationNeeded,
+      preToolClarificationQuestion: state.preToolUnderstanding?.clarificationQuestion,
+      preToolEntities: state.preToolUnderstanding?.entities ? Object.fromEntries(Object.entries(state.preToolUnderstanding.entities).filter(([, value]) => Boolean(value)).map(([key, value]) => [key, String(value)])) : undefined,
+      preToolContinuationDetected: state.preToolUnderstanding?.continuationDetected,
+      preToolCorrectionDetected: state.preToolUnderstanding?.correctionDetected,
+      preToolHandoffRecommended: state.preToolUnderstanding?.handoffRecommended,
+      preToolReason: state.preToolUnderstanding?.reason,
       workflowSelected: state.routing?.workflowName,
       toolCalled: state.toolExecution?.selectedTool,
       toolOutput: state.toolResult?.result,

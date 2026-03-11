@@ -100,6 +100,47 @@ export interface UnderstandingDiagnostics {
   fallbackBehavior: string;
 }
 
+
+export interface PreToolUnderstandingResult {
+  inferredSupportIntent: "service_status" | "announcements" | "none";
+  turnAct:
+    | "greeting"
+    | "small_talk"
+    | "thanks"
+    | "farewell"
+    | "task_request"
+    | "slot_answer"
+    | "correction"
+    | "objection"
+    | "emotion"
+    | "meta_question"
+    | "handoff_request"
+    | "unclear";
+  intentConfidence: number;
+  entities: {
+    region?: string;
+    category?: string;
+    serviceNameOrRegion?: string;
+    dateRange?: string;
+  };
+  clarificationNeeded: boolean;
+  clarificationQuestion?: string;
+  suggestedWorkflow?: string;
+  continuationDetected: boolean;
+  correctionDetected: boolean;
+  handoffRecommended: boolean;
+  reason: string;
+}
+
+export interface PreToolUnderstandingDiagnostics {
+  provider: "openai" | "mock";
+  model: string;
+  promptType: "pretool_understanding_v1";
+  rawOutput: string;
+  validationStatus: "valid" | "sanitized" | "fallback";
+  fallbackBehavior: string;
+}
+
 export interface ResponseGenerationContext {
   originalUtterance: string;
   sentiment?: string;
@@ -248,6 +289,8 @@ export interface SessionState {
     diagnostics: UnderstandingDiagnostics;
   };
   understandingDiagnostics?: UnderstandingDiagnostics;
+  preToolUnderstanding?: PreToolUnderstandingResult;
+  preToolUnderstandingDiagnostics?: PreToolUnderstandingDiagnostics;
   routing?: {
     decision: "workflow" | "no_workflow" | "handoff" | "clarify";
     workflowName?: string;
@@ -291,6 +334,7 @@ export interface SessionState {
   latency?: {
     sttFinalizationMs?: number;
     understandingMs?: number;
+    preToolUnderstandingMs?: number;
     routingPolicyMs?: number;
     toolExecutionMs?: number;
     responseGenerationMs?: number;
