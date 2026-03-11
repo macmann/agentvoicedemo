@@ -86,6 +86,7 @@ export interface StructuredUnderstandingResult {
   refersToPendingQuestion: boolean;
   resetPendingQuestion: boolean;
   replacePendingWorkflow: boolean;
+  requestType?: "support_task" | "answer_to_pending_question" | "support_task_continuation" | "support_task_correction" | "conversational_or_meta";
   reason?: string;
 }
 
@@ -155,6 +156,7 @@ export interface ConversationState {
   turns: ConversationTurn[];
   currentStatus: "idle" | "listening" | "processing" | "awaiting_user_input" | "speaking" | "handoff";
   activeIntent?: string;
+  activeSupportIntent?: "service_status" | "announcements";
   pendingWorkflow?: PendingWorkflowState;
   pendingQuestion?: PendingQuestionState;
   pendingSlots: string[];

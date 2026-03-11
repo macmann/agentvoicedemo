@@ -72,6 +72,13 @@ export function runPolicyEngine(
   const replacePendingWorkflow = shouldReplaceWorkflow(turnAct, utterance, options.pendingWorkflowName);
 
   let responseStrategy = strategyForTurnAct(turnAct, inferredIntent, hasActiveTask);
+  const isSupportIntent = inferredIntent === "service_status" || inferredIntent === "announcements";
+  let requestType: NonNullable<SessionState["understanding"]>["requestType"] =
+    hasActiveTask && turnAct === "slot_answer"
+      ? "answer_to_pending_question"
+      : isSupportIntent && turnAct === "task_request"
+        ? "support_task"
+        : "conversational_or_meta";
 
   if (offTopic || demoOutOfScopeSupport) {
     responseStrategy = "bounded_redirect";
@@ -95,6 +102,9 @@ export function runPolicyEngine(
     responseStrategy = "ask_clarification";
   }
 
+  if (isSupportIntent && turnAct === "correction") requestType = "support_task_correction";
+  if (isSupportIntent && turnAct === "slot_answer") requestType = "support_task_continuation";
+
   const responseMode = responseModeForStrategy(responseStrategy);
 
   return {
@@ -113,6 +123,7 @@ export function runPolicyEngine(
       refersToPendingQuestion,
       resetPendingQuestion,
       replacePendingWorkflow,
+      requestType,
       reason
     },
     understandingDiagnostics: providerResult?.diagnostics,

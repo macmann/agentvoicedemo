@@ -310,7 +310,12 @@ export function OpsQaDashboard() {
           <PanelCard title="Conversation State">
             {kv("Intent", latest?.metadata.intent ?? "-")}
             {kv("Support Intent", latest?.metadata.supportIntent ?? "none")}
+            {kv("Active Support Intent", latest?.metadata.activeSupportIntent ?? "-")}
             {kv("Request Type", latest?.metadata.supportRequestType ?? "-")}
+            {kv("Continuation", String(latest?.metadata.continuationDetected ?? false))}
+            {kv("Support Intent Transition", latest?.metadata.supportIntentTransition ?? "-")}
+            {kv("Corrected Slots", JSON.stringify(latest?.metadata.correctedSlots ?? {}))}
+            {kv("Previous Tool Context", JSON.stringify(latest?.metadata.previousToolContext ?? {}))}
             {kv("Out of Scope", String(latest?.metadata.outOfScopeDemoRequest ?? false))}
             {kv("Turn Act", latest?.metadata.turnAct ?? "-")}
             {kv("Strategy", latest?.metadata.responseStrategy ?? "-")}

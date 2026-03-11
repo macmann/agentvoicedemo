@@ -49,6 +49,67 @@ function hasStrongIntentShift(text: string): boolean {
   return lowered.includes("human") || lowered.includes("cancel") || lowered.includes("never mind") || lowered.includes("stop") || lowered.includes("check outage") || lowered.includes("want to check");
 }
 
+
+function parseFollowupSlots(utterance: string): { serviceNameOrRegion?: string; serviceCategory?: string; dateScope?: string } {
+  const lowered = utterance.toLowerCase().trim();
+  const result: { serviceNameOrRegion?: string; serviceCategory?: string; dateScope?: string } = {};
+
+  const regionMatch = lowered.match(/(?:my home is in|service in|in|for|no,? i mean|no,?)\s+([a-z][a-z\s-]{1,30})$/i);
+  const bareRegion = /^(?:no,?\s+|yeah,?\s+)?([a-z][a-z\s-]{1,30})$/i.exec(lowered);
+  const candidate = regionMatch?.[1] ?? bareRegion?.[1];
+  if (candidate && candidate.split(/\s+/).length <= 3) {
+    result.serviceNameOrRegion = candidate
+      .trim()
+      .split(/\s+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  if (lowered.includes("ftth")) result.serviceCategory = "FTTH";
+  if (lowered.includes("this week")) result.dateScope = "this_week";
+  if (lowered.includes("today")) result.dateScope = "today";
+  if (lowered.includes("tomorrow")) result.dateScope = "tomorrow";
+
+  return result;
+}
+
+function isIntentResetOrSwitch(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return lowered.includes("reset") || lowered.includes("start over") || lowered.includes("new request") || lowered.includes("announcement") || lowered.includes("status or announcements");
+}
+
+function detectSupportContinuation(input: {
+  utterance: string;
+  turnAct?: string;
+  activeSupportIntent?: "service_status" | "announcements";
+  pendingQuestion?: PendingQuestionState;
+}): { continuationDetected: boolean; requestType?: "support_task_continuation" | "support_task_correction"; correctedSlots: Record<string, string> } {
+  const { utterance, turnAct, activeSupportIntent, pendingQuestion } = input;
+  if (!activeSupportIntent || isIntentResetOrSwitch(utterance) || hasStrongIntentShift(utterance)) {
+    return { continuationDetected: false, correctedSlots: {} };
+  }
+
+  const parsed = parseFollowupSlots(utterance);
+  const hasSlotLikeSignal = Boolean(parsed.serviceNameOrRegion || parsed.serviceCategory || parsed.dateScope || pendingQuestion);
+  const isCorrection = turnAct === "correction" || /^no,?\b/i.test(utterance.toLowerCase()) || utterance.toLowerCase().includes("i mean");
+  const isSlotAnswer = turnAct === "slot_answer" || utterance.trim().split(/\s+/).length <= 4;
+
+  if (activeSupportIntent === "service_status" && hasSlotLikeSignal && (isCorrection || isSlotAnswer || turnAct === "unclear")) {
+    const correctedSlots: Record<string, string> = {};
+    if (parsed.serviceNameOrRegion) correctedSlots.serviceNameOrRegion = parsed.serviceNameOrRegion;
+    if (parsed.serviceCategory) correctedSlots.serviceCategory = parsed.serviceCategory;
+    return { continuationDetected: true, requestType: isCorrection ? "support_task_correction" : "support_task_continuation", correctedSlots };
+  }
+
+  if (activeSupportIntent === "announcements" && (parsed.dateScope || pendingQuestion || isSlotAnswer)) {
+    const correctedSlots: Record<string, string> = {};
+    if (parsed.dateScope) correctedSlots.dateScope = parsed.dateScope;
+    return { continuationDetected: true, requestType: isCorrection ? "support_task_correction" : "support_task_continuation", correctedSlots };
+  }
+
+  return { continuationDetected: false, correctedSlots: {} };
+}
+
 function buildClarificationRetryPrompt(pendingQuestion: PendingQuestionState): string {
   return buildClarificationPrompt(pendingQuestion.expectedSlot, pendingQuestion.retryCount + 1);
 }
@@ -191,27 +252,50 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const understandingMs = Date.now() - understandingStart;
 
   const turnAct = evaluated.understanding.turnAct;
+  const previousActiveSupportIntent = input.previousSession?.conversation?.activeSupportIntent;
+  const continuation = detectSupportContinuation({
+    utterance: transcriptText,
+    turnAct,
+    activeSupportIntent: previousActiveSupportIntent,
+    pendingQuestion: pendingQuestionContext
+  });
+
+  const adjustedUnderstanding = continuation.continuationDetected && previousActiveSupportIntent
+    ? {
+        ...evaluated.understanding,
+        intent: previousActiveSupportIntent,
+        intentConfidence: Math.max(0.93, evaluated.understanding.intentConfidence),
+        responseStrategy: "continue_workflow" as const,
+        responseMode: "task_oriented" as const,
+        requestType: continuation.requestType,
+        entities: {
+          ...evaluated.understanding.entities,
+          ...continuation.correctedSlots
+        }
+      }
+    : evaluated.understanding;
+
   const awaitingPendingAnswer = Boolean(pendingQuestionContext && input.previousSession?.conversation?.currentStatus === "awaiting_user_input" && !hasStrongIntentShift(transcriptText) && !isSlotNoiseTurnAct(turnAct));
   const slotResolutionResult: SlotResolutionResult | undefined = awaitingPendingAnswer ? resolvePendingQuestionAnswer(transcriptText, pendingQuestionContext) : undefined;
   const answeredPendingQuestion = Boolean(slotResolutionResult?.matched && slotResolutionResult.confidence !== "low");
 
-  state = { ...state, understanding: evaluated.understanding, understandingDiagnostics: evaluated.understandingDiagnostics, policy: evaluated.policy };
+  state = { ...state, understanding: adjustedUnderstanding, understandingDiagnostics: evaluated.understandingDiagnostics, policy: evaluated.policy };
 
   const routingStart = Date.now();
   const baseRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
   const routingPolicyMs = Date.now() - routingStart;
 
   const priorPending = input.previousSession?.conversation?.pendingWorkflow;
-  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText) && !evaluated.understanding.replacePendingWorkflow);
+  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText) && !adjustedUnderstanding.replacePendingWorkflow);
   const inferredPendingFromRouting = inferPendingQuestionFromRouting(baseRouting);
 
   let pendingQuestion: PendingQuestionState | undefined = pendingQuestionContext;
-  if (evaluated.understanding.resetPendingQuestion) pendingQuestion = undefined;
+  if (adjustedUnderstanding.resetPendingQuestion) pendingQuestion = undefined;
   else if (answeredPendingQuestion && pendingQuestionContext) pendingQuestion = undefined;
   else if (awaitingPendingAnswer && pendingQuestionContext && !answeredPendingQuestion) pendingQuestion = { ...pendingQuestionContext, retryCount: pendingQuestionContext.retryCount + 1, prompt: buildClarificationRetryPrompt(pendingQuestionContext) };
   else if (!pendingQuestion && inferredPendingFromRouting) pendingQuestion = inferredPendingFromRouting;
 
-  const nextWorkflowName = evaluated.understanding.replacePendingWorkflow
+  const nextWorkflowName = adjustedUnderstanding.replacePendingWorkflow
     ? baseRouting.workflowName ?? null
     : continuePending
       ? priorPending?.workflowName
@@ -232,7 +316,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   });
 
   let routing: NonNullable<SessionState["routing"]> = { ...baseRouting, dialogueState: "responding" };
-  let resolutionMode: "answer_to_pending_question" | "fresh_intent_turn" = "fresh_intent_turn";
+  let resolutionMode: "answer_to_pending_question" | "fresh_intent_turn" | "support_task_continuation" | "support_task_correction" = continuation.requestType ?? "fresh_intent_turn";
 
   if (conversation.pendingWorkflow && (continuePending || conversation.pendingWorkflow.missingSlots.length > 0)) {
     if (answeredPendingQuestion && pendingQuestionContext) {
@@ -429,17 +513,24 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     fillerResponseText,
     metadata: {
       intent: state.understanding?.intent,
-      supportIntent:
-        state.understanding?.intent === "service_status"
-          ? "service_status"
-          : state.understanding?.intent === "announcements"
-            ? "announcements"
-            : "none",
-      supportRequestType:
-        state.understanding?.turnAct === "task_request" &&
-        (state.understanding?.intent === "service_status" || state.understanding?.intent === "announcements" || state.understanding?.intent === "unsupported_support")
-          ? "support_task"
-          : "conversational_or_meta",
+      supportIntent: state.conversation?.activeSupportIntent ?? (state.understanding?.intent === "service_status" ? "service_status" : state.understanding?.intent === "announcements" ? "announcements" : "none"),
+      supportRequestType: state.understanding?.requestType ?? "conversational_or_meta",
+      activeSupportIntent: state.conversation?.activeSupportIntent,
+      continuationDetected: continuation.continuationDetected,
+      correctedSlots: continuation.correctedSlots,
+      previousToolContext: input.previousSession?.toolExecution
+        ? {
+            toolName: input.previousSession.toolExecution.selectedTool,
+            requestPayload: input.previousSession.toolExecution.requestPayload,
+            normalizedResult: input.previousSession.toolExecution.normalizedResult
+          }
+        : undefined,
+      supportIntentTransition:
+        input.previousSession?.conversation?.activeSupportIntent && state.conversation?.activeSupportIntent === input.previousSession.conversation.activeSupportIntent
+          ? "preserved"
+          : state.conversation?.activeSupportIntent
+            ? "reset_to_new_support_intent"
+            : "reset",
       outOfScopeDemoRequest: state.understanding?.intent === "unsupported_support",
       entities: state.understanding?.entities,
       workflowSelected: state.routing?.workflowName,

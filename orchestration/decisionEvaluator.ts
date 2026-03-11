@@ -16,8 +16,9 @@ export function evaluateDeterministicDecision(state: Pick<SessionState, "underst
   const thresholds = state.policy?.thresholds;
   const lowConfidence = (state.understanding?.intentConfidence ?? 0) < (thresholds?.minIntentConfidence ?? 0.72);
 
-  const conversationalNoWorkflowActs = ["greeting", "small_talk", "thanks", "farewell", "meta_question", "objection", "correction", "emotion"];
-  if (state.understanding?.turnAct && conversationalNoWorkflowActs.includes(state.understanding.turnAct)) {
+  const continuationRequestType = state.understanding?.requestType === "support_task_continuation" || state.understanding?.requestType === "support_task_correction";
+  const conversationalNoWorkflowActs = ["greeting", "small_talk", "thanks", "farewell", "meta_question", "objection", "emotion"];
+  if (!continuationRequestType && state.understanding?.turnAct && conversationalNoWorkflowActs.includes(state.understanding.turnAct)) {
     return {
       decision: "no_workflow",
       selectedRule: "conversational_turn_no_workflow",
