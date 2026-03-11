@@ -4,6 +4,7 @@ import { UnderstoodIntent } from "@/orchestration/routingConfig";
 export interface ScenarioSignals {
   intent: UnderstoodIntent;
   supportIntent: boolean;
+  outOfScopeSupport: boolean;
   emotionOnly: boolean;
   empathyNeeded: boolean;
   discomfortDetected: boolean;
@@ -15,6 +16,8 @@ export interface ScenarioSignals {
 }
 
 function extractServiceOrRegion(text: string): string | undefined {
+  if (text.includes("ftth")) return "FTTH";
+  if (text.includes("berlin")) return "Berlin";
   if (text.includes("core internet")) return "Core Internet";
   if (text.includes("downtown")) return "Downtown";
   if (text.includes("mobile")) return "Mobile";
@@ -27,34 +30,26 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
   const explicitHumanRequest = text.includes("talk to a human") || text.includes("speak to a human") || turnAct === "handoff_request";
   const discomfortDetected = text.includes("sick") || text.includes("not feeling well") || text.includes("unwell");
   const frustration = text.includes("frustrating") || text.includes("upset") || text.includes("angry") || turnAct === "emotion" || turnAct === "objection";
-  const outage = text.includes("outage") || text.includes("down");
-  const announcements = text.includes("announcement") || text.includes("notification");
-  const reschedule = text.includes("reschedule") || text.includes("technician");
-  const routerIssue = text.includes("router") || text.includes("blinking red");
-  const internetIssue = text.includes("internet") || text.includes("offline");
+  const outage = text.includes("outage") || text.includes("service down") || text.includes("internet is down") || text.includes("current status") || text.includes("service status") || text.includes("ftth") || text.includes("down?");
+  const announcements = text.includes("announcement") || text.includes("notification") || text.includes("maintenance") || text.includes("notice");
+  const unsupportedSupport = text.includes("reschedule") || text.includes("technician") || text.includes("support ticket") || text.includes("create a ticket") || text.includes("diagnostic") || text.includes("run diagnostics");
   const sttFailureHint = text.includes("[unclear]") || text.includes("mumble");
   const service = extractServiceOrRegion(text);
 
   if (explicitHumanRequest) {
-    return { intent: "talk_to_human", supportIntent: true, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.98, entities: { request: "human_agent" }, sttFailureHint };
+    return { intent: "talk_to_human", supportIntent: false, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.98, entities: { request: "human_agent" }, sttFailureHint };
   }
   if (announcements) {
-    return { intent: "announcement_check", supportIntent: true, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.9, entities: { active: "true", ...(service ? { serviceNameOrRegion: service } : {}) }, sttFailureHint };
-  }
-  if (reschedule) {
-    return { intent: "reschedule_visit", supportIntent: true, emotionOnly: false, empathyNeeded: discomfortDetected || frustration, discomfortDetected, explicitHumanRequest, sentiment: discomfortDetected || frustration ? "negative" : "neutral", confidence: 0.9, entities: { issueType: "appointment", action: "reschedule" }, sttFailureHint };
+    return { intent: "announcements", supportIntent: true, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.92, entities: { active: "true", ...(service ? { serviceNameOrRegion: service } : {}) }, sttFailureHint };
   }
   if (outage) {
-    return { intent: "outage_check", supportIntent: true, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.9, entities: { issueType: "connectivity", check: "outage", ...(service ? { serviceNameOrRegion: service } : {}) }, sttFailureHint };
+    return { intent: "service_status", supportIntent: true, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.92, entities: { issueType: "connectivity", check: "service_status", ...(service ? { serviceNameOrRegion: service } : {}) }, sttFailureHint };
   }
-  if (routerIssue) {
-    return { intent: "report_router_issue", supportIntent: true, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.64, entities: { issueType: "connectivity", symptom: "router_blinking_red" }, sttFailureHint };
-  }
-  if (internetIssue) {
-    return { intent: "report_internet_issue", supportIntent: true, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.85, entities: { issueType: "connectivity", symptom: "internet_down", ...(service ? { serviceNameOrDevice: service } : {}) }, sttFailureHint };
+  if (unsupportedSupport) {
+    return { intent: "unsupported_support", supportIntent: true, outOfScopeSupport: true, emotionOnly: false, empathyNeeded: discomfortDetected || frustration, discomfortDetected, explicitHumanRequest, sentiment: discomfortDetected || frustration ? "negative" : "neutral", confidence: 0.92, entities: { outOfScopeSupport: "true" }, sttFailureHint };
   }
   if (discomfortDetected || frustration) {
-    return { intent: "empathy_only", supportIntent: false, emotionOnly: true, empathyNeeded: true, discomfortDetected, explicitHumanRequest, sentiment: "negative", confidence: 0.88, entities: { context: discomfortDetected ? "health_discomfort" : "frustration" }, sttFailureHint };
+    return { intent: "unclear", supportIntent: false, outOfScopeSupport: false, emotionOnly: true, empathyNeeded: true, discomfortDetected, explicitHumanRequest, sentiment: "negative", confidence: 0.88, entities: { context: discomfortDetected ? "health_discomfort" : "frustration" }, sttFailureHint };
   }
-  return { intent: "unclear", supportIntent: false, emotionOnly: false, empathyNeeded: false, discomfortDetected, explicitHumanRequest, sentiment: "neutral", confidence: 0.58, entities: { issueType: "general_support" }, sttFailureHint };
+  return { intent: "unclear", supportIntent: false, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: false, discomfortDetected, explicitHumanRequest, sentiment: "neutral", confidence: 0.58, entities: { issueType: "general_support" }, sttFailureHint };
 }

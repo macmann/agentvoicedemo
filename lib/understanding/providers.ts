@@ -6,7 +6,7 @@ import { StructuredUnderstandingResult, UnderstandingDiagnostics } from "@/types
 const PROMPT_TYPE = "structured_intent_v1" as const;
 const OPENAI_MODEL = process.env.OPENAI_UNDERSTANDING_MODEL ?? "gpt-5-mini";
 
-const KNOWN_INTENTS: UnderstoodIntent[] = ["report_internet_issue", "report_router_issue", "outage_check", "reschedule_visit", "talk_to_human", "announcement_check", "empathy_only", "unclear"];
+const KNOWN_INTENTS: UnderstoodIntent[] = ["service_status", "announcements", "talk_to_human", "unsupported_support", "unclear"];
 
 function buildSystemPrompt() {
   return [
@@ -14,6 +14,9 @@ function buildSystemPrompt() {
     "Return JSON only. No prose, no markdown, no extra keys.",
     "Classify the user into one of the known intents only:",
     KNOWN_INTENTS.join(", "),
+    "Map outage/down/status requests to service_status.",
+    "Map announcements/maintenance/notices requests to announcements.",
+    "Map unsupported support tasks (reschedule/diagnostics/ticket creation) to unsupported_support.",
     "Extract entities as Record<string,string>.",
     "Schema requires: intent,intentConfidence,entities,empathyNeeded,workflowRequired,recommendedWorkflow,handoffRecommended,turnAct,responseStrategy,responseMode,refersToPendingQuestion,resetPendingQuestion,replacePendingWorkflow,reason.",
     JSON.stringify({

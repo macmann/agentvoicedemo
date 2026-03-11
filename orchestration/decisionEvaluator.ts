@@ -67,7 +67,7 @@ export function evaluateDeterministicDecision(state: Pick<SessionState, "underst
       selectedRule: "low_confidence_clarify_first",
       reason: "Intent confidence below deterministic threshold.",
       clarificationReason: "low_intent_confidence",
-      clarificationPrompt: "Is this affecting all devices, or just one?"
+      clarificationPrompt: "I can help with current service status or announcements. Which one should I check?"
     };
   }
 

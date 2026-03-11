@@ -1,11 +1,8 @@
 export type UnderstoodIntent =
-  | "report_internet_issue"
-  | "report_router_issue"
-  | "outage_check"
-  | "reschedule_visit"
+  | "service_status"
+  | "announcements"
   | "talk_to_human"
-  | "announcement_check"
-  | "empathy_only"
+  | "unsupported_support"
   | "unclear"
   | "unknown";
 
@@ -14,28 +11,22 @@ export type RoutingDecision = "workflow" | "no_workflow" | "handoff" | "clarify"
 export interface RouteConfigEntry {
   intent: UnderstoodIntent;
   decision: RoutingDecision;
-  workflowName?: "diagnose_connectivity" | "check_outage_status" | "fetch_notifications" | "reschedule_technician";
+  workflowName?: "fetch_service_status" | "check_outage_status" | "fetch_notifications";
   reason: string;
 }
 
 export const INTENT_ROUTING_TABLE: RouteConfigEntry[] = [
-  { intent: "report_internet_issue", decision: "workflow", workflowName: "diagnose_connectivity", reason: "Internet issue requires connectivity diagnostics." },
-  { intent: "report_router_issue", decision: "workflow", workflowName: "diagnose_connectivity", reason: "Router symptom maps to connectivity diagnostics." },
-  { intent: "outage_check", decision: "workflow", workflowName: "check_outage_status", reason: "Outage request must run outage lookup." },
-  { intent: "reschedule_visit", decision: "workflow", workflowName: "reschedule_technician", reason: "Appointment reschedule requires technician scheduling workflow." },
+  { intent: "service_status", decision: "workflow", workflowName: "fetch_service_status", reason: "Service status request should query live status feed." },
+  { intent: "announcements", decision: "workflow", workflowName: "fetch_notifications", reason: "Announcements request should query notification feed." },
   { intent: "talk_to_human", decision: "handoff", reason: "User explicitly requested a human agent." },
-  { intent: "announcement_check", decision: "workflow", workflowName: "fetch_notifications", reason: "Announcements request should query notification feed." },
-  { intent: "empathy_only", decision: "no_workflow", reason: "User expressed emotion without operational request." }
+  { intent: "unsupported_support", decision: "no_workflow", reason: "Support request is outside the demo scope and should be politely redirected." }
 ];
 
 export const ROUTING_CONFIG: Record<UnderstoodIntent, RouteConfigEntry> = {
-  report_internet_issue: INTENT_ROUTING_TABLE[0],
-  report_router_issue: INTENT_ROUTING_TABLE[1],
-  outage_check: INTENT_ROUTING_TABLE[2],
-  reschedule_visit: INTENT_ROUTING_TABLE[3],
-  talk_to_human: INTENT_ROUTING_TABLE[4],
-  announcement_check: INTENT_ROUTING_TABLE[5],
-  empathy_only: INTENT_ROUTING_TABLE[6],
-  unclear: { intent: "unclear", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." },
-  unknown: { intent: "unclear", decision: "clarify", reason: "Intent could not be confidently mapped to a known workflow." }
+  service_status: INTENT_ROUTING_TABLE[0],
+  announcements: INTENT_ROUTING_TABLE[1],
+  talk_to_human: INTENT_ROUTING_TABLE[2],
+  unsupported_support: INTENT_ROUTING_TABLE[3],
+  unclear: { intent: "unclear", decision: "no_workflow", reason: "Intent was not confidently mapped; keep conversational and ask user to pick one of the demo-supported tasks." },
+  unknown: { intent: "unclear", decision: "no_workflow", reason: "Intent was not confidently mapped; keep conversational and ask user to pick one of the demo-supported tasks." }
 };
