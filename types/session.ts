@@ -80,6 +80,7 @@ export interface StructuredUnderstandingResult {
     | "empathy_then_continue"
     | "explain_and_continue"
     | "replace_workflow"
+    | "isolated_issue_escalation"
     | "handoff"
     | "bounded_redirect";
   responseMode: "conversational_only" | "task_oriented";

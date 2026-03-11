@@ -12,7 +12,8 @@ const CONVERSATIONAL_FALLBACKS: Record<string, string> = {
   repair_and_reset: "You’re right — sorry about that. Tell me what you’d like help with.",
   explain_and_continue: "I’m asking so I can narrow down the issue. If you want, I can also check outage status instead.",
   bounded_redirect: "I’m here to help with service and support issues. Tell me what you’d like me to check.",
-  empathy_then_continue: "I hear you — that sounds frustrating. I can help with the next step when you’re ready."
+  empathy_then_continue: "I hear you — that sounds frustrating. I can help with the next step when you’re ready.",
+  isolated_issue_escalation: "Service looks normal overall, so this may be isolated to your home connection. I can connect you with human support for the next step."
 };
 
 function mockFromContext(context: ResponseGenerationContext): string {

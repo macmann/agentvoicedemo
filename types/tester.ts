@@ -51,6 +51,17 @@ export interface TesterDebugState {
   handoffTriggered?: boolean;
   handoffReason?: string;
   handoffSummary?: string;
+  previousStatusResult?: string;
+  isolatedIssueDetected?: boolean;
+  escalationRecommended?: boolean;
+  preservedSupportContext?: {
+    regionChecked?: string;
+    previousStatusResult: string;
+    isolatedIssueDetected: boolean;
+    escalationRecommended: boolean;
+    explicitHumanRequest: boolean;
+    userFollowup: string;
+  };
   providerMode: "mock" | "live" | "mixed";
   toolExecutionMode?: "mock" | "api";
   toolEndpoint?: string;

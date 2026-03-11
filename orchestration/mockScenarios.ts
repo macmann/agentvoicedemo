@@ -44,7 +44,7 @@ function extractServiceOrRegion(text: string): string | undefined {
 export function parseScenarioSignals(utterance: string): ScenarioSignals {
   const text = utterance.toLowerCase();
   const turnAct = detectTurnAct(utterance, false);
-  const explicitHumanRequest = text.includes("talk to a human") || text.includes("speak to a human") || turnAct === "handoff_request";
+  const explicitHumanRequest = text.includes("talk to a human") || text.includes("speak to a human") || text.includes("talk to a person") || text.includes("want a human") || text.includes("raise a ticket") || text.includes("open a ticket") || turnAct === "handoff_request";
   const discomfortDetected = text.includes("sick") || text.includes("not feeling well") || text.includes("unwell");
   const frustration = text.includes("frustrating") || text.includes("upset") || text.includes("angry") || turnAct === "emotion" || turnAct === "objection";
   const outage = text.includes("outage") || text.includes("service down") || text.includes("internet is down") || text.includes("current status") || text.includes("service status") || text.includes("ftth") || text.includes("down?") || /^no,?\s+[a-z]/.test(text) || /service in [a-z]/.test(text) || /my home is in [a-z]/.test(text);

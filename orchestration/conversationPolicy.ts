@@ -25,6 +25,7 @@ export type ResponseStrategy =
   | "empathy_then_continue"
   | "explain_and_continue"
   | "replace_workflow"
+  | "isolated_issue_escalation"
   | "handoff"
   | "bounded_redirect";
 
@@ -139,6 +140,8 @@ export function responseForStrategy(input: {
       return "I know this is frustrating. Let’s get this sorted.";
     case "bounded_redirect":
       return "Right now I can help with current service status and announcements. I can check either of those for you.";
+    case "isolated_issue_escalation":
+      return "Thanks for confirming. Service looks normal at a broader level, so this may be isolated to your home connection. I can connect you with a human support agent for next-step help.";
     case "ask_clarification":
       return input.clarificationPrompt;
     default:
