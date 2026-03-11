@@ -50,6 +50,49 @@ function hasStrongIntentShift(text: string): boolean {
 }
 
 
+function previousStatusWasOperational(previousSession?: SessionState): { operational: boolean; summary?: string; region?: string } {
+  const previousTool = previousSession?.toolExecution;
+  const previousResult = previousSession?.toolResult?.result as { matchedRegion?: string; matchedServiceName?: string; overallStatus?: string } | undefined;
+  if (!previousTool || previousTool.selectedTool !== "check_outage_status") {
+    return { operational: false };
+  }
+
+  const normalized = (previousResult?.overallStatus ?? "").toUpperCase();
+  const operational = normalized === "OPERATIONAL";
+  const region = previousResult?.matchedRegion ?? previousResult?.matchedServiceName;
+  const summary = region ? `${region} ${operational ? "operational" : normalized.toLowerCase()}` : operational ? "operational" : undefined;
+  return { operational, summary, region };
+}
+
+function detectPostStatusIsolatedIssue(utterance: string): { isolatedIssueDetected: boolean; escalationRecommended: boolean; explicitHumanRequest: boolean } {
+  const text = utterance.toLowerCase();
+  const isolatedSignals = [
+    "my home",
+    "at home",
+    "still has a problem",
+    "still isn't working",
+    "still not working",
+    "my internet still",
+    "my connection",
+    "only my home",
+    "only my house",
+    "need help with my connection"
+  ];
+  const nextStepSignals = ["what do i do now", "what do i have to do now", "what now", "next step", "what should i do"];
+  const humanSignals = ["talk to a person", "talk to a human", "want a human", "raise a ticket", "open a ticket", "can someone help me directly"];
+
+  const isolatedIssueDetected = isolatedSignals.some((signal) => text.includes(signal));
+  const asksNextStep = nextStepSignals.some((signal) => text.includes(signal));
+  const explicitHumanRequest = humanSignals.some((signal) => text.includes(signal));
+
+  return {
+    isolatedIssueDetected: isolatedIssueDetected || asksNextStep || explicitHumanRequest,
+    escalationRecommended: isolatedIssueDetected || asksNextStep || explicitHumanRequest,
+    explicitHumanRequest
+  };
+}
+
+
 function parseFollowupSlots(utterance: string): { serviceNameOrRegion?: string; serviceCategory?: string; dateScope?: string } {
   const lowered = utterance.toLowerCase().trim().replace(/[?.!,]+$/g, "");
   const result: { serviceNameOrRegion?: string; serviceCategory?: string; dateScope?: string } = {};
@@ -276,27 +319,47 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       }
     : evaluated.understanding;
 
+  const previousStatus = previousStatusWasOperational(input.previousSession);
+  const postStatusSignals = detectPostStatusIsolatedIssue(transcriptText);
+  const isolatedIssueAfterOperationalStatus = Boolean(
+    previousActiveSupportIntent === "service_status" &&
+      previousStatus.operational &&
+      postStatusSignals.isolatedIssueDetected
+  );
+
+  const understanding = isolatedIssueAfterOperationalStatus
+    ? {
+        ...adjustedUnderstanding,
+        intent: postStatusSignals.explicitHumanRequest ? ("talk_to_human" as const) : ("service_status" as const),
+        handoffRecommended: postStatusSignals.explicitHumanRequest,
+        responseStrategy: postStatusSignals.explicitHumanRequest ? ("handoff" as const) : ("isolated_issue_escalation" as const),
+        responseMode: "task_oriented" as const,
+        requestType: "support_task_continuation" as const,
+        reason: "Operational service status already returned; user still reports isolated home issue and needs escalation."
+      }
+    : adjustedUnderstanding;
+
   const awaitingPendingAnswer = Boolean(pendingQuestionContext && input.previousSession?.conversation?.currentStatus === "awaiting_user_input" && !hasStrongIntentShift(transcriptText) && !isSlotNoiseTurnAct(turnAct));
   const slotResolutionResult: SlotResolutionResult | undefined = awaitingPendingAnswer ? resolvePendingQuestionAnswer(transcriptText, pendingQuestionContext) : undefined;
   const answeredPendingQuestion = Boolean(slotResolutionResult?.matched && slotResolutionResult.confidence !== "low");
 
-  state = { ...state, understanding: adjustedUnderstanding, understandingDiagnostics: evaluated.understandingDiagnostics, policy: evaluated.policy };
+  state = { ...state, understanding, understandingDiagnostics: evaluated.understandingDiagnostics, policy: evaluated.policy };
 
   const routingStart = Date.now();
   const baseRouting = runDeterministicRoutingPolicy({ understanding: state.understanding, policy: state.policy });
   const routingPolicyMs = Date.now() - routingStart;
 
   const priorPending = input.previousSession?.conversation?.pendingWorkflow;
-  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText) && !adjustedUnderstanding.replacePendingWorkflow);
+  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText) && !understanding.replacePendingWorkflow);
   const inferredPendingFromRouting = inferPendingQuestionFromRouting(baseRouting);
 
   let pendingQuestion: PendingQuestionState | undefined = pendingQuestionContext;
-  if (adjustedUnderstanding.resetPendingQuestion) pendingQuestion = undefined;
+  if (understanding.resetPendingQuestion) pendingQuestion = undefined;
   else if (answeredPendingQuestion && pendingQuestionContext) pendingQuestion = undefined;
   else if (awaitingPendingAnswer && pendingQuestionContext && !answeredPendingQuestion) pendingQuestion = { ...pendingQuestionContext, retryCount: pendingQuestionContext.retryCount + 1, prompt: buildClarificationRetryPrompt(pendingQuestionContext) };
   else if (!pendingQuestion && inferredPendingFromRouting) pendingQuestion = inferredPendingFromRouting;
 
-  const nextWorkflowName = adjustedUnderstanding.replacePendingWorkflow
+  const nextWorkflowName = understanding.replacePendingWorkflow
     ? baseRouting.workflowName ?? null
     : continuePending
       ? priorPending?.workflowName
@@ -394,6 +457,29 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   state = { ...state, handoff: runDeterministicHandoffPolicy(state) };
 
+  const preservedSupportContext = isolatedIssueAfterOperationalStatus
+    ? {
+        regionChecked: previousStatus.region ?? input.previousSession?.conversation?.collectedSlots?.serviceNameOrRegion,
+        previousStatusResult: previousStatus.summary ?? "operational",
+        isolatedIssueDetected: true,
+        escalationRecommended: postStatusSignals.escalationRecommended,
+        explicitHumanRequest: postStatusSignals.explicitHumanRequest,
+        userFollowup: transcriptText
+      }
+    : undefined;
+
+  if (isolatedIssueAfterOperationalStatus && state.handoff?.triggered) {
+    const contextSummary = `Region checked=${preservedSupportContext?.regionChecked ?? "unknown"}; Status=${preservedSupportContext?.previousStatusResult}; User still reports isolated home issue; Requested next-step support=${postStatusSignals.escalationRecommended}.`;
+    state = {
+      ...state,
+      handoff: {
+        ...state.handoff,
+        reason: postStatusSignals.explicitHumanRequest ? "explicit_human_request_after_operational_status" : "isolated_issue_after_operational_status",
+        summary: contextSummary
+      }
+    };
+  }
+
   const responseStart = Date.now();
   input.onStage?.("speaking_final");
   const responseGeneration = await getGeneratedResponse(buildResponseContext(state));
@@ -411,7 +497,9 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     : undefined;
 
   const responseText = state.handoff?.triggered
-    ? `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
+    ? isolatedIssueAfterOperationalStatus
+      ? `I checked ${previousStatus.region ?? "your area"} and service is operational at a broader level. Since your home issue is still ongoing, I’m connecting you to a human support agent now.`
+      : `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
     : strategyText && state.understanding?.responseMode === "conversational_only"
       ? strategyText
       : answeredPendingQuestion && pendingQuestionContext?.expectedSlot && slotResolutionResult?.normalizedValue
@@ -541,6 +629,10 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       handoffTriggered: state.handoff?.triggered,
       handoffReason: state.handoff?.reason,
       handoffSummary: state.handoff?.summary,
+      previousStatusResult: previousStatus.summary,
+      isolatedIssueDetected: isolatedIssueAfterOperationalStatus,
+      escalationRecommended: isolatedIssueAfterOperationalStatus ? postStatusSignals.escalationRecommended : undefined,
+      preservedSupportContext,
       providerMode: providerMode(state),
       toolExecutionMode: state.toolExecution?.executionMode,
       toolEndpoint: state.toolExecution?.endpoint,

@@ -326,6 +326,12 @@ export function OpsQaDashboard() {
             {kv("Missing Slots", (latest?.metadata.missingSlots ?? []).join(", ") || "-")}
             {kv("Tool Blocked (Missing Slot)", String(latest?.metadata.toolExecutionBlockedDueToMissingSlot ?? false))}
             {kv("Region Extracted", latest?.metadata.regionExtracted ?? "-")}
+            {kv("Previous Status Result", latest?.metadata.previousStatusResult ?? "-")}
+            {kv("Isolated Issue Detected", String(latest?.metadata.isolatedIssueDetected ?? false))}
+            {kv("Escalation Recommended", String(latest?.metadata.escalationRecommended ?? false))}
+            {kv("Handoff Triggered", String(latest?.metadata.handoffTriggered ?? false))}
+            {kv("Handoff Reason", latest?.metadata.handoffReason ?? "-")}
+            {kv("Preserved Support Context", JSON.stringify(latest?.metadata.preservedSupportContext ?? {}))}
           </PanelCard>
 
           <PanelCard title="Tool Execution">
