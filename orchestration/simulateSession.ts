@@ -150,7 +150,7 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
       label: "LLM response drafted",
       run: async (state) => {
         const responseMs = randomBetween(250, 700);
-        const context = buildResponseContext(state);
+        const context = buildResponseContext({ state, postToolResponseMode: "llm_generated", groundedToolResultUsed: Boolean(state.toolExecution?.normalizedResult), followupCorrectionTurn: false });
         const responseGeneration = await getGeneratedResponse(context);
 
         return {

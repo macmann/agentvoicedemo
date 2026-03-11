@@ -41,6 +41,7 @@ function generateResponseWithMock(context: ResponseGenerationContext): ResponseG
   return {
     provider: "mock",
     model: "deterministic-mock-response-v1",
+    source: "deterministic_template",
     toneSettings: TONE_SETTINGS,
     maxResponseLength: MAX_RESPONSE_LENGTH,
     structuredContext: context,

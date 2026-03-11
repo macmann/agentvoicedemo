@@ -336,16 +336,22 @@ function buildGroundedToolResponse(state: SessionState): string | undefined {
     const result = (state.toolResult.result ?? {}) as { matchedServiceName?: string; matchedRegion?: string; overallStatus?: string; estimatedRecoveryText?: string; clarificationNeeded?: boolean; clarificationPrompt?: string };
     if (result.clarificationNeeded) return result.clarificationPrompt ?? "I need one more detail before I can check outages.";
     const service = result.matchedServiceName ?? result.matchedRegion ?? "that service";
-    const status = (result.overallStatus ?? "UNKNOWN").replaceAll("_", " ").toLowerCase();
     const recovery = result.estimatedRecoveryText ? ` We expect recovery in ${result.estimatedRecoveryText}.` : "";
-    return `Yes, ${service} is currently experiencing a ${status}.${recovery} Is there anything else I can help you with?`;
+    const normalizedStatus = (result.overallStatus ?? "UNKNOWN").toUpperCase();
+
+    if (normalizedStatus === "OPERATIONAL") return `${service} is currently operational.`;
+    if (normalizedStatus === "PARTIAL_OUTAGE") return `${service} is currently experiencing a partial outage.${recovery}`;
+    if (normalizedStatus === "MAJOR_OUTAGE") return `${service} is currently experiencing a major outage.${recovery}`;
+    if (normalizedStatus === "MAINTENANCE") return `${service} is currently under maintenance.${recovery}`;
+    const status = normalizedStatus.replaceAll("_", " ").toLowerCase();
+    return `${service} is currently ${status}.${recovery}`;
   }
 
   if (state.toolResult.toolName === "fetch_notifications") {
     const notifications = ((state.toolResult.result as { notifications?: Array<{ title?: string; body?: string }> })?.notifications ?? []);
     if (!notifications.length) return "I checked announcements and there are no active notices right now.";
     const first = notifications[0];
-    return `I found an active announcement: ${first.title ?? "Service update"}. ${first.body ?? ""}`.trim();
+    return `There’s one active announcement: ${first.title ?? "Service update"}. ${first.body ?? ""}`.trim();
   }
 
   return undefined;
@@ -363,6 +369,7 @@ export interface RunTesterTurnInput {
   voiceModeEnabled: boolean;
   fillerEnabled?: boolean;
   intentUnderstandingMode?: "deterministic" | "llm_assisted";
+  postToolResponseMode?: "deterministic" | "llm_generated";
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -412,6 +419,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   input.onStage?.("processing");
   const intentUnderstandingMode = input.intentUnderstandingMode ?? "deterministic";
+  const postToolResponseMode = input.postToolResponseMode ?? "deterministic";
   let preToolUnderstandingMs = 0;
   let preTool = input.previousSession?.preToolUnderstanding;
   let preToolDiagnostics = input.previousSession?.preToolUnderstandingDiagnostics;
@@ -726,12 +734,32 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     };
   }
 
+  const groundedToolResponse = buildGroundedToolResponse(state);
+  const responseContext = buildResponseContext({
+    state,
+    postToolResponseMode,
+    groundedToolResultUsed: Boolean(groundedToolResponse),
+    previousSession: input.previousSession,
+    followupCorrectionTurn: continuation.requestType === "support_task_correction"
+  });
+
   const responseStart = Date.now();
   input.onStage?.("speaking_final");
-  const responseGeneration = await getGeneratedResponse(buildResponseContext(state));
+  const responseGeneration = postToolResponseMode === "llm_generated"
+    ? await getGeneratedResponse(responseContext)
+    : {
+        provider: "mock" as const,
+        model: "deterministic-template-v1",
+        source: "deterministic_template" as const,
+        toneSettings: ["concise", "grounded"],
+        maxResponseLength: 220,
+        structuredContext: responseContext,
+        finalResponseText: groundedToolResponse ?? "Thanks for the update. I can help with the next step.",
+        guardrailNote: "Deterministic template path.",
+        fallbackBehavior: "Deterministic template path selected by runtime config."
+      };
   const responseGenerationMs = Date.now() - responseStart;
 
-  const groundedToolResponse = buildGroundedToolResponse(state);
   const strategyText = state.understanding
     ? responseForStrategy({
         strategy: state.understanding.responseStrategy,
@@ -742,17 +770,21 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       })
     : undefined;
 
-  const responseText = state.handoff?.triggered
-    ? isolatedIssueAfterOperationalStatus
-      ? `I checked ${previousStatus.region ?? "your area"} and service is operational at a broader level. Since your home issue is still ongoing, I’m connecting you to a human support agent now.`
-      : `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
-    : strategyText && state.understanding?.responseMode === "conversational_only"
-      ? strategyText
-      : answeredPendingQuestion && pendingQuestionContext?.expectedSlot && slotResolutionResult?.normalizedValue
-        ? `${buildSlotFillAcknowledgement(pendingQuestionContext.expectedSlot, slotResolutionResult.normalizedValue)} ${groundedToolResponse ?? responseGeneration.finalResponseText}`
-        : state.routing?.decision === "clarify" && state.routing.clarificationPrompt
-          ? strategyText ?? state.routing.clarificationPrompt
-          : groundedToolResponse ?? strategyText ?? responseGeneration.finalResponseText;
+  const responseText = (
+    state.handoff?.triggered
+      ? isolatedIssueAfterOperationalStatus
+        ? `I checked ${previousStatus.region ?? "your area"} and service is operational at a broader level. Since your home issue is still ongoing, I’m connecting you to a human support agent now.`
+        : `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
+      : strategyText && state.understanding?.responseMode === "conversational_only"
+        ? strategyText
+        : answeredPendingQuestion && pendingQuestionContext?.expectedSlot && slotResolutionResult?.normalizedValue
+          ? `${buildSlotFillAcknowledgement(pendingQuestionContext.expectedSlot, slotResolutionResult.normalizedValue)} ${groundedToolResponse ?? responseGeneration.finalResponseText}`
+          : state.routing?.decision === "clarify" && state.routing.clarificationPrompt
+            ? strategyText ?? state.routing.clarificationPrompt
+            : postToolResponseMode === "deterministic"
+              ? groundedToolResponse ?? strategyText ?? responseGeneration.finalResponseText
+              : responseGeneration.finalResponseText || groundedToolResponse || strategyText
+  ) ?? "Thanks for checking. I can help with the next step.";
 
   const assistantTurn = {
     id: `turn-${crypto.randomUUID()}`,
@@ -851,6 +883,14 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       intent: state.understanding?.intent,
       intentUnderstandingMode,
       intentModeLabel: intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic",
+      postToolResponseModeUsed: postToolResponseMode,
+      postToolResponseModeLabel: postToolResponseMode === "llm_generated" ? "LLM-generated" : "Deterministic",
+      postToolProvider: responseGeneration.provider,
+      postToolModel: responseGeneration.model,
+      postToolLlmUsed: postToolResponseMode === "llm_generated" && responseGeneration.provider === "openai",
+      responseGenerationLatencyMs: responseGenerationMs,
+      responseGenerationSource: responseGeneration.source ?? (postToolResponseMode === "llm_generated" ? "llm_generated" : "deterministic_template"),
+      groundedToolResultUsed: Boolean(groundedToolResponse),
       supportIntent: state.conversation?.activeSupportIntent ?? (state.understanding?.intent === "service_status" ? "service_status" : state.understanding?.intent === "announcements" ? "announcements" : "none"),
       supportRequestType: state.understanding?.requestType ?? "conversational_or_meta",
       activeSupportIntent: state.conversation?.activeSupportIntent,

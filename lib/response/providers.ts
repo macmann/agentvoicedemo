@@ -52,6 +52,7 @@ export async function generateResponseWithMock(context: ResponseGenerationContex
   return {
     provider: "mock",
     model: "deterministic-mock-response-v1",
+    source: "deterministic_template",
     toneSettings: TONE_SETTINGS,
     maxResponseLength: MAX_RESPONSE_LENGTH,
     structuredContext: context,
@@ -79,7 +80,7 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
           {
             role: "system",
             content:
-              "You generate customer-support voice replies. Use responseMode and responseStrategy in context. For conversational_only replies: be brief, natural, no enterprise phrasing, at most one next-step question, and no diagnostic jargon unless needed. For task_oriented replies: keep precise and action-focused. Stay grounded only in supplied context and never invent unsupported facts."
+              "You generate customer-support voice replies. Output must be strictly grounded in normalizedToolResult/context and never add unsupported facts. Be concise and natural. Correctly distinguish OPERATIONAL vs PARTIAL_OUTAGE vs MAJOR_OUTAGE vs MAINTENANCE. Never say outage wording for OPERATIONAL. Ask at most one follow-up question only when clarificationStillNeeded=true."
           },
           { role: "user", content: JSON.stringify(context) }
         ]
@@ -92,15 +93,20 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
     }
 
     const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const finalResponseText = payload.choices?.[0]?.message?.content?.trim() || (await generateResponseWithMock(context)).finalResponseText;
+    const rawText = payload.choices?.[0]?.message?.content?.trim() || (await generateResponseWithMock(context)).finalResponseText;
+    const sanitizedText = rawText
+      .replace(/experiencing\s+a\s+operational/gi, "operational")
+      .replace(/\s{2,}/g, " ")
+      .trim();
 
     return {
       provider: "openai",
       model: OPENAI_MODEL,
+      source: "llm_generated",
       toneSettings: TONE_SETTINGS,
       maxResponseLength: MAX_RESPONSE_LENGTH,
       structuredContext: context,
-      finalResponseText: finalResponseText.slice(0, MAX_RESPONSE_LENGTH),
+      finalResponseText: sanitizedText.slice(0, MAX_RESPONSE_LENGTH),
       guardrailNote: GUARDRAIL_NOTE,
       fallbackBehavior: "If unavailable, fallback to deterministic mock response."
     };
