@@ -33,6 +33,12 @@ export interface TesterDebugState {
   toolOutput?: unknown;
   routingDecision?: string;
   dialogueState?: string;
+  turnAct?: string;
+  responseStrategy?: string;
+  refersToPendingQuestion?: boolean;
+  resetPendingQuestion?: boolean;
+  replacePendingWorkflow?: boolean;
+  pendingWorkflowTransition?: "continued" | "reset" | "replaced";
   handoffTriggered?: boolean;
   handoffReason?: string;
   handoffSummary?: string;

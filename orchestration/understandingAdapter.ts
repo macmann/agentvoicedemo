@@ -1,3 +1,4 @@
+import { detectTurnAct } from "@/orchestration/conversationPolicy";
 import { parseScenarioSignals } from "@/orchestration/mockScenarios";
 import { ROUTING_CONFIG } from "@/orchestration/routingConfig";
 import { StructuredUnderstandingResult, UnderstandingDiagnostics } from "@/types/session";
@@ -10,6 +11,7 @@ export interface UnderstandingProviderResult {
 export async function understandWithMock(utterance: string, fallbackBehavior = "Client mock fallback used."): Promise<UnderstandingProviderResult> {
   const signals = parseScenarioSignals(utterance);
   const route = ROUTING_CONFIG[signals.intent];
+  const turnAct = detectTurnAct(utterance, false);
   const understanding: StructuredUnderstandingResult = {
     intent: signals.intent,
     intentConfidence: signals.confidence,
@@ -19,6 +21,11 @@ export async function understandWithMock(utterance: string, fallbackBehavior = "
     workflowRequired: route.decision === "workflow",
     recommendedWorkflow: route.workflowName,
     handoffRecommended: signals.explicitHumanRequest,
+    turnAct,
+    responseStrategy: turnAct === "greeting" ? "greet_and_invite" : turnAct === "small_talk" ? "small_talk_and_invite" : route.decision === "clarify" ? "ask_clarification" : "continue_workflow",
+    refersToPendingQuestion: false,
+    resetPendingQuestion: false,
+    replacePendingWorkflow: false,
     reason: route.reason
   };
 

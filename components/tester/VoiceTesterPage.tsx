@@ -152,6 +152,12 @@ export function VoiceTesterPage() {
             <div><strong>TTS provider mode:</strong> {latestTurn?.metadata.ttsProviderMode ?? "-"}</div>
             <div><strong>Tool vs filler overlap:</strong> {formatMs(latestTurn?.metadata.latency?.fillerSpeechOverlapMs)}</div>
             <div><strong>Intent:</strong> {latestTurn?.metadata.intent ?? "-"}</div>
+            <div><strong>Turn act:</strong> {latestTurn?.metadata.turnAct ?? "-"}</div>
+            <div><strong>Response strategy:</strong> {latestTurn?.metadata.responseStrategy ?? "-"}</div>
+            <div><strong>Refers to pending question:</strong> {String(latestTurn?.metadata.refersToPendingQuestion ?? false)}</div>
+            <div><strong>Reset pending question:</strong> {String(latestTurn?.metadata.resetPendingQuestion ?? false)}</div>
+            <div><strong>Replace pending workflow:</strong> {String(latestTurn?.metadata.replacePendingWorkflow ?? false)}</div>
+            <div><strong>Pending workflow transition:</strong> {latestTurn?.metadata.pendingWorkflowTransition ?? "continued"}</div>
             <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>
             <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>
             <div><strong>Provider mode:</strong> {latestTurn?.metadata.providerMode ?? "mock"}</div>
