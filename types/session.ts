@@ -174,6 +174,15 @@ export interface ConversationState {
     reason?: string;
     errorType?: string;
   };
+  toolClarification?: {
+    toolName: string;
+    clarificationNeeded: boolean;
+    clarificationReason?: string;
+    expectedSlotFromTool?: string;
+    candidateCategories?: string[];
+    prompt?: string;
+    lastUnresolvedToolContext?: Record<string, unknown>;
+  };
 }
 
 export interface ResponseGenerationDiagnostics {

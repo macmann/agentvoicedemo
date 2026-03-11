@@ -34,8 +34,10 @@ function buildRequest(state: SessionState, toolName: ToolName): ToolRequestByNam
   }
 
   if (toolName === "check_outage_status") {
+    const regionOrService = entities.serviceNameOrRegion ?? slots.serviceNameOrRegion ?? slots.postcode;
+    const category = entities.serviceCategory ?? slots.serviceCategory;
     return {
-      serviceNameOrRegion: entities.serviceNameOrRegion ?? slots.serviceNameOrRegion ?? slots.postcode,
+      serviceNameOrRegion: [regionOrService, category].filter(Boolean).join(" ").trim() || undefined,
       active: true
     };
   }
