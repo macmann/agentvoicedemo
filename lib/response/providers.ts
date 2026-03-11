@@ -1,6 +1,7 @@
 import { ResponseGenerationContext, ResponseGenerationDiagnostics } from "@/types/session";
 
 const OPENAI_MODEL = process.env.OPENAI_RESPONSE_MODEL ?? "gpt-5-mini";
+const OPENAI_ENDPOINT_PATH = "/responses";
 const MAX_RESPONSE_LENGTH = 220;
 const TONE_SETTINGS = ["calm", "helpful", "empathetic", "voice-friendly", "concise"];
 const GUARDRAIL_NOTE = "Unsupported facts must not be invented. Use only structured context.";
@@ -53,6 +54,12 @@ export async function generateResponseWithMock(context: ResponseGenerationContex
     provider: "mock",
     model: "deterministic-mock-response-v1",
     source: "deterministic_template",
+    stage: "post_tool",
+    endpointPath: OPENAI_ENDPOINT_PATH,
+    requestPayloadBuilt: false,
+    structuredSchemaUsed: false,
+    jsonSchemaValidationRequested: false,
+    fallbackOccurred: true,
     toneSettings: TONE_SETTINGS,
     maxResponseLength: MAX_RESPONSE_LENGTH,
     structuredContext: context,
@@ -64,36 +71,67 @@ export async function generateResponseWithMock(context: ResponseGenerationContex
 
 export async function generateResponseWithOpenAI(context: ResponseGenerationContext): Promise<ResponseGenerationDiagnostics> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey.trim().length < 20) return generateResponseWithMock(context);
+  if (!apiKey || apiKey.trim().length < 20) {
+    const mock = await generateResponseWithMock(context);
+    return {
+      ...mock,
+      failureStage: "post_tool",
+      failureCategory: "missing_api_key",
+      fallbackBehavior: "OPENAI_API_KEY missing/invalid; mock response used.",
+      requestPayloadBuilt: false
+    };
+  }
 
-  const endpoint = `${process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1"}/chat/completions`;
+  const endpoint = `${process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1"}${OPENAI_ENDPOINT_PATH}`;
 
   try {
+    const requestBody = {
+      model: OPENAI_MODEL,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: "You generate customer-support voice replies. Output must be strictly grounded in normalizedToolResult/context and never add unsupported facts. Be concise and natural. Correctly distinguish OPERATIONAL vs PARTIAL_OUTAGE vs MAJOR_OUTAGE vs MAINTENANCE. Never say outage wording for OPERATIONAL. Ask at most one follow-up question only when clarificationStillNeeded=true."
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: JSON.stringify(context) }]
+        }
+      ],
+      max_output_tokens: 110
+    };
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.2,
-        max_tokens: 110,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You generate customer-support voice replies. Output must be strictly grounded in normalizedToolResult/context and never add unsupported facts. Be concise and natural. Correctly distinguish OPERATIONAL vs PARTIAL_OUTAGE vs MAJOR_OUTAGE vs MAINTENANCE. Never say outage wording for OPERATIONAL. Ask at most one follow-up question only when clarificationStillNeeded=true."
-          },
-          { role: "user", content: JSON.stringify(context) }
-        ]
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
       const mock = await generateResponseWithMock(context);
-      return { ...mock, fallbackBehavior: `OpenAI error ${response.status}; mock response used.` };
+      return {
+        ...mock,
+        fallbackBehavior: `OpenAI error ${response.status}; mock response used.`,
+        failureStage: "post_tool",
+        failureCategory: "http_error",
+        failureStatusCode: response.status,
+        failureResponseBody: errorBody.slice(0, 1200),
+        endpointPath: OPENAI_ENDPOINT_PATH,
+        model: OPENAI_MODEL,
+        requestPayloadBuilt: true,
+        structuredSchemaUsed: false,
+        jsonSchemaValidationRequested: false,
+        fallbackOccurred: true
+      };
     }
 
-    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const rawText = payload.choices?.[0]?.message?.content?.trim() || (await generateResponseWithMock(context)).finalResponseText;
+    const payload = (await response.json()) as { output_text?: string };
+    const rawText = payload.output_text?.trim() || (await generateResponseWithMock(context)).finalResponseText;
     const sanitizedText = rawText
       .replace(/experiencing\s+a\s+operational/gi, "operational")
       .replace(/\s{2,}/g, " ")
@@ -103,6 +141,12 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
       provider: "openai",
       model: OPENAI_MODEL,
       source: "llm_generated",
+      stage: "post_tool",
+      endpointPath: OPENAI_ENDPOINT_PATH,
+      requestPayloadBuilt: true,
+      structuredSchemaUsed: false,
+      jsonSchemaValidationRequested: false,
+      fallbackOccurred: false,
       toneSettings: TONE_SETTINGS,
       maxResponseLength: MAX_RESPONSE_LENGTH,
       structuredContext: context,
@@ -110,9 +154,22 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
       guardrailNote: GUARDRAIL_NOTE,
       fallbackBehavior: "If unavailable, fallback to deterministic mock response."
     };
-  } catch {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const mock = await generateResponseWithMock(context);
-    return { ...mock, fallbackBehavior: "OpenAI request failed; mock response used." };
+    return {
+      ...mock,
+      fallbackBehavior: "OpenAI request failed; mock response used.",
+      failureStage: "post_tool",
+      failureCategory: "network_error",
+      failureResponseBody: errorMessage,
+      endpointPath: OPENAI_ENDPOINT_PATH,
+      model: OPENAI_MODEL,
+      requestPayloadBuilt: true,
+      structuredSchemaUsed: false,
+      jsonSchemaValidationRequested: false,
+      fallbackOccurred: true
+    };
   }
 }
 

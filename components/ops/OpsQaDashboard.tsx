@@ -368,6 +368,14 @@ export function OpsQaDashboard() {
             {kv("Provider", latest?.metadata.preToolProvider ?? "-")}
             {kv("Model", latest?.metadata.preToolModel ?? "-")}
             {kv("Provider Selection", latest?.metadata.preToolProviderSelectionReason ?? "-")}
+            {kv("Endpoint", latest?.metadata.preToolEndpointType ?? "-")}
+            {kv("Fallback", String(latest?.metadata.preToolFallbackOccurred ?? false))}
+            {kv("Failure Category", latest?.metadata.preToolFailureCategory ?? "-")}
+            {kv("Failure Status", String(latest?.metadata.preToolFailureStatusCode ?? "-"))}
+            {kv("Request payload built", String(latest?.metadata.preToolRequestPayloadBuilt ?? false))}
+            {kv("Structured schema", String(latest?.metadata.preToolStructuredSchemaUsed ?? false))}
+            {kv("JSON schema validation", String(latest?.metadata.preToolJsonSchemaValidationRequested ?? false))}
+            {kv("Failure body", latest?.metadata.preToolFailureResponseBody ?? "-")}
             {kv("Inferred Support Intent", latest?.metadata.preToolInferredSupportIntent ?? "-")}
             {kv("Intent Confidence", String(latest?.metadata.preToolIntentConfidence ?? "-"))}
             {kv("Rescue Mapping Applied", String(latest?.metadata.preToolRescueMappingApplied ?? false))}
@@ -403,6 +411,14 @@ export function OpsQaDashboard() {
             {kv("Model", latest?.metadata.postToolModel ?? latest?.session.responseGeneration?.model ?? "-")}
             {kv("Mode", latest?.metadata.postToolResponseModeLabel ?? "-")}
             {kv("Source", latest?.metadata.responseGenerationSource ?? "-")}
+            {kv("Endpoint", latest?.metadata.postToolEndpointType ?? "-")}
+            {kv("Fallback", String(latest?.metadata.postToolFallbackOccurred ?? false))}
+            {kv("Failure Category", latest?.metadata.postToolFailureCategory ?? "-")}
+            {kv("Failure Status", String(latest?.metadata.postToolFailureStatusCode ?? "-"))}
+            {kv("Request payload built", String(latest?.metadata.postToolRequestPayloadBuilt ?? false))}
+            {kv("Structured schema", String(latest?.metadata.postToolStructuredSchemaUsed ?? false))}
+            {kv("JSON schema validation", String(latest?.metadata.postToolJsonSchemaValidationRequested ?? false))}
+            {kv("Failure body", latest?.metadata.postToolFailureResponseBody ?? "-")}
             {kv("LLM used", String(latest?.metadata.postToolLlmUsed ?? false))}
             {kv("Grounded tool result", String(latest?.metadata.groundedToolResultUsed ?? false))}
             {kv("Latency", `${latest?.metadata.responseGenerationLatencyMs ?? latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs ?? "-"} ms`)}

@@ -141,6 +141,16 @@ export interface PreToolUnderstandingDiagnostics {
   fallbackBehavior: string;
   providerSelectionReason?: string;
   rescueMappingApplied?: boolean;
+  stage?: "pre_tool";
+  endpointPath?: string;
+  structuredSchemaUsed?: boolean;
+  requestPayloadBuilt?: boolean;
+  jsonSchemaValidationRequested?: boolean;
+  fallbackOccurred?: boolean;
+  failureStage?: "pre_tool";
+  failureCategory?: "http_error" | "network_error" | "invalid_json" | "provider_disabled" | "missing_api_key";
+  failureStatusCode?: number;
+  failureResponseBody?: string;
 }
 
 export interface ResponseGenerationContext {
@@ -252,6 +262,16 @@ export interface ResponseGenerationDiagnostics {
   finalResponseText: string;
   guardrailNote: string;
   fallbackBehavior: string;
+  stage?: "post_tool";
+  endpointPath?: string;
+  requestPayloadBuilt?: boolean;
+  structuredSchemaUsed?: boolean;
+  jsonSchemaValidationRequested?: boolean;
+  fallbackOccurred?: boolean;
+  failureStage?: "post_tool";
+  failureCategory?: "http_error" | "network_error" | "invalid_json" | "provider_disabled" | "missing_api_key";
+  failureStatusCode?: number;
+  failureResponseBody?: string;
 }
 
 export interface TtsSettingsView {

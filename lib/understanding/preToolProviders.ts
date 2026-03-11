@@ -5,6 +5,7 @@ import { PreToolUnderstandingDiagnostics, PreToolUnderstandingResult } from "@/t
 const OPENAI_MODEL = process.env.OPENAI_UNDERSTANDING_MODEL ?? "gpt-5-mini";
 const PROMPT_TYPE = "pretool_understanding_v1" as const;
 const PRETOOL_PROVIDER = process.env.OPENAI_PRETOOL_PROVIDER ?? "mock";
+const OPENAI_ENDPOINT_PATH = "/responses";
 
 type Input = {
   utterance: string;
@@ -19,6 +20,46 @@ type ProviderOutput = {
   understanding: PreToolUnderstandingResult;
   diagnostics: PreToolUnderstandingDiagnostics;
 };
+
+const PRETOOL_UNDERSTANDING_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "inferredSupportIntent",
+    "turnAct",
+    "intentConfidence",
+    "entities",
+    "clarificationNeeded",
+    "clarificationQuestion",
+    "suggestedWorkflow",
+    "continuationDetected",
+    "correctionDetected",
+    "handoffRecommended",
+    "reason"
+  ],
+  properties: {
+    inferredSupportIntent: { type: "string", enum: ["service_status", "announcements", "none"] },
+    turnAct: { type: "string" },
+    intentConfidence: { type: "number", minimum: 0, maximum: 1 },
+    entities: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        region: { type: "string" },
+        category: { type: "string" },
+        serviceNameOrRegion: { type: "string" },
+        dateRange: { type: "string" }
+      }
+    },
+    clarificationNeeded: { type: "boolean" },
+    clarificationQuestion: { type: "string" },
+    suggestedWorkflow: { type: "string" },
+    continuationDetected: { type: "boolean" },
+    correctionDetected: { type: "boolean" },
+    handoffRecommended: { type: "boolean" },
+    reason: { type: "string" }
+  }
+} as const;
 
 function safeJsonParse(raw: string): unknown {
   try {
@@ -195,7 +236,7 @@ function buildSystemPrompt() {
   ].join("\n");
 }
 
-export async function getPreToolUnderstandingMock(input: Input, fallbackBehavior = "Mock pre-tool understanding selected.", providerSelectionReason = "Mock provider selected.") {
+export async function getPreToolUnderstandingMock(input: Input, fallbackBehavior = "Mock pre-tool understanding selected.", providerSelectionReason = "Mock provider selected.", failure?: Partial<PreToolUnderstandingDiagnostics>) {
   const understanding = buildMock(input);
   const output: ProviderOutput = {
     understanding,
@@ -207,7 +248,14 @@ export async function getPreToolUnderstandingMock(input: Input, fallbackBehavior
       validationStatus: "valid" as const,
       fallbackBehavior,
       providerSelectionReason,
-      rescueMappingApplied: false
+      rescueMappingApplied: false,
+      stage: "pre_tool",
+      endpointPath: OPENAI_ENDPOINT_PATH,
+      structuredSchemaUsed: true,
+      requestPayloadBuilt: false,
+      jsonSchemaValidationRequested: true,
+      fallbackOccurred: true,
+      ...failure
     }
   };
   return applyRescueMapping(input, output);
@@ -219,43 +267,81 @@ export async function getPreToolUnderstandingOpenAI(input: Input) {
     return getPreToolUnderstandingMock(
       input,
       "OPENAI_API_KEY missing/invalid; using mock pre-tool understanding.",
-      "OpenAI provider unavailable: OPENAI_API_KEY missing or invalid."
+      "OpenAI provider unavailable: OPENAI_API_KEY missing or invalid.",
+      { failureStage: "pre_tool", failureCategory: "missing_api_key", fallbackOccurred: true, requestPayloadBuilt: false }
     );
   }
 
-  const endpoint = `${process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1"}/chat/completions`;
+  const endpoint = `${process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1"}${OPENAI_ENDPOINT_PATH}`;
 
   try {
+    const requestBody = {
+      model: OPENAI_MODEL,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: buildSystemPrompt() }]
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: JSON.stringify(input) }]
+        }
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "pretool_understanding",
+          strict: true,
+          schema: PRETOOL_UNDERSTANDING_SCHEMA
+        }
+      }
+    };
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: buildSystemPrompt() },
-          { role: "user", content: JSON.stringify(input) }
-        ]
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
       return getPreToolUnderstandingMock(
         input,
         `OpenAI error ${response.status}; using mock pre-tool understanding.`,
-        `OpenAI provider request failed with HTTP ${response.status}.`
+        `OpenAI provider request failed at stage=pre_tool endpoint=${OPENAI_ENDPOINT_PATH} model=${OPENAI_MODEL} with HTTP ${response.status}. Body: ${errorBody.slice(0, 300)}.`,
+        {
+          failureStage: "pre_tool",
+          failureCategory: "http_error",
+          failureStatusCode: response.status,
+          failureResponseBody: errorBody.slice(0, 1200),
+          endpointPath: OPENAI_ENDPOINT_PATH,
+          model: OPENAI_MODEL,
+          requestPayloadBuilt: Boolean(requestBody.input?.length),
+          structuredSchemaUsed: true,
+          jsonSchemaValidationRequested: true,
+          fallbackOccurred: true
+        }
       );
     }
 
-    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const rawOutput = payload.choices?.[0]?.message?.content ?? "{}";
+    const payload = (await response.json()) as { output_text?: string };
+    const rawOutput = payload.output_text ?? "{}";
     const parsed = safeJsonParse(rawOutput);
     if (!parsed) {
       const mock = await getPreToolUnderstandingMock(
         input,
         "Model output was not valid JSON; reverted to mock pre-tool understanding.",
-        "OpenAI output failed JSON validation; using mock fallback."
+        "OpenAI output failed JSON validation at pre_tool stage; using mock fallback.",
+        {
+          failureStage: "pre_tool",
+          failureCategory: "invalid_json",
+          endpointPath: OPENAI_ENDPOINT_PATH,
+          model: OPENAI_MODEL,
+          requestPayloadBuilt: true,
+          structuredSchemaUsed: true,
+          jsonSchemaValidationRequested: true,
+          fallbackOccurred: true
+        }
       );
       return { ...mock, diagnostics: { ...mock.diagnostics, rawOutput, validationStatus: "fallback" as const } };
     }
@@ -271,15 +357,33 @@ export async function getPreToolUnderstandingOpenAI(input: Input) {
         validationStatus: sanitized.validationStatus,
         fallbackBehavior: "If validation fails, sanitize and keep deterministic guardrails.",
         providerSelectionReason: "OpenAI provider selected: valid API key detected.",
-        rescueMappingApplied: false
+        rescueMappingApplied: false,
+        stage: "pre_tool",
+        endpointPath: OPENAI_ENDPOINT_PATH,
+        structuredSchemaUsed: true,
+        requestPayloadBuilt: true,
+        jsonSchemaValidationRequested: true,
+        fallbackOccurred: false
       }
     };
     return applyRescueMapping(input, output);
-  } catch {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return getPreToolUnderstandingMock(
       input,
       "OpenAI request failed; using mock pre-tool understanding.",
-      "OpenAI provider unavailable: request/network failure."
+      `OpenAI provider unavailable at stage=pre_tool endpoint=${OPENAI_ENDPOINT_PATH} model=${OPENAI_MODEL}: ${errorMessage}`,
+      {
+        failureStage: "pre_tool",
+        failureCategory: "network_error",
+        failureResponseBody: errorMessage,
+        endpointPath: OPENAI_ENDPOINT_PATH,
+        model: OPENAI_MODEL,
+        requestPayloadBuilt: true,
+        structuredSchemaUsed: true,
+        jsonSchemaValidationRequested: true,
+        fallbackOccurred: true
+      }
     );
   }
 }
@@ -289,7 +393,8 @@ export async function getPreToolUnderstanding(input: Input) {
     return getPreToolUnderstandingMock(
       input,
       "Pre-tool OpenAI provider disabled; using mock pre-tool understanding.",
-      `Pre-tool provider set to '${PRETOOL_PROVIDER}'; OpenAI disabled for this node.`
+      `Pre-tool provider set to '${PRETOOL_PROVIDER}'; OpenAI disabled for this node.`,
+      { failureStage: "pre_tool", failureCategory: "provider_disabled", fallbackOccurred: true, requestPayloadBuilt: false }
     );
   }
 
