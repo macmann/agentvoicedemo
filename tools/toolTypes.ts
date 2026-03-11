@@ -63,18 +63,34 @@ export interface CheckOutageStatusRequest {
 }
 
 export interface CheckOutageStatusResponse {
+  rawQuery?: string;
+  parsedRegion?: string;
+  parsedCategory?: string;
   matchedServiceName?: string;
   matchedRegion?: string;
+  matchedCategory?: string;
   overallStatus: "OPERATIONAL" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE" | "UNKNOWN";
   serviceStatus?: "OPERATIONAL" | "PARTIAL_OUTAGE" | "MAJOR_OUTAGE";
   announcementTitle?: string;
   announcementBody?: string;
   estimatedRecoveryText?: string;
+  clarificationPrompt?: string;
   source: {
     serviceStatusUsed: boolean;
     notificationsUsed: boolean;
   };
   clarificationNeeded?: boolean;
+  debug?: {
+    parsedRegion?: string;
+    parsedCategory?: string;
+    candidateMatchesFound?: {
+      region?: Array<{ name?: string; region?: string; category?: string; status?: string }>;
+      category?: Array<{ name?: string; region?: string; category?: string; status?: string }>;
+      combined?: Array<{ name?: string; region?: string; category?: string; status?: string }>;
+    };
+    selectedMatch?: { name?: string; region?: string; category?: string; status?: string } | null;
+    clarificationReason?: string | null;
+  };
 }
 
 export interface RescheduleTechnicianRequest {
