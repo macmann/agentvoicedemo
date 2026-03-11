@@ -40,6 +40,7 @@ export function VoiceTesterPage() {
     isDebugOpen,
     setIsDebugOpen,
     playbackStatus,
+    sttState,
     runTurn,
     startListening,
     stopListening,
@@ -51,14 +52,16 @@ export function VoiceTesterPage() {
   const status = conversation.status;
   const empty = conversation.messages.length === 0;
 
+  const liveTranscript = sttState.finalTranscript || sttState.interimTranscript;
+
   const statusText = useMemo(() => {
-    if (status === "listening") return "Listening for your voice...";
-    if (status === "thinking") return "Understanding and routing your request...";
+    if (status === "listening") return sttState.isSpeechDetected ? "Listening: speech detected" : "Listening: hearing you...";
+    if (status === "thinking") return "Processing your utterance...";
     if (status === "tool") return "Checking service tools now...";
     if (status === "speaking") return "Assistant is responding...";
     if (status === "error") return "A fallback path was used.";
     return "Ready";
-  }, [status]);
+  }, [status, sttState.isSpeechDetected]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -90,6 +93,16 @@ export function VoiceTesterPage() {
         </div>
 
         <form onSubmit={submit} className="space-y-3 border-t border-slate-200 bg-white p-4">
+          {sttState.isListening && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+              <div className="flex items-center justify-between">
+                <strong className="inline-flex items-center gap-2">🎙 Listening {sttState.isSpeechDetected ? "• speech detected" : "• waiting for speech"}</strong>
+                <span>silence: {Math.round(sttState.silenceMs)} ms</span>
+              </div>
+              <p className="mt-1 text-blue-800">{liveTranscript ? `"${liveTranscript}"` : "Hearing you... Start talking naturally."}</p>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -97,15 +110,15 @@ export function VoiceTesterPage() {
               onClick={startListening}
               className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
             >
-              🎙 Start listening
+              🎙 Talk
             </button>
             <button
               type="button"
               disabled={status !== "listening"}
               onClick={stopListening}
-              className="rounded-lg bg-slate-700 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40"
             >
-              Stop
+              Cancel / Stop (debug)
             </button>
             <button type="button" onClick={() => setVoiceModeEnabled((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">
               Voice mode: {voiceModeEnabled ? "On" : "Off"}
@@ -144,6 +157,15 @@ export function VoiceTesterPage() {
         </button>
         {isDebugOpen && (
           <div className="space-y-3 p-4 text-xs text-slate-700">
+            <div><strong>STT provider mode:</strong> {sttState.providerMode}</div>
+            <div><strong>STT interim transcript:</strong> {sttState.interimTranscript || "-"}</div>
+            <div><strong>STT final transcript:</strong> {sttState.finalTranscript || "-"}</div>
+            <div><strong>STT listening:</strong> {sttState.isListening ? "yes" : "no"}</div>
+            <div><strong>STT speech detected:</strong> {sttState.isSpeechDetected ? "yes" : "no"}</div>
+            <div><strong>STT silence ms:</strong> {Math.round(sttState.silenceMs)}</div>
+            <div><strong>STT auto-submitted:</strong> {sttState.autoSubmitted ? "yes" : "no"}</div>
+            <div><strong>STT recording started at:</strong> {sttState.recordingStartedAt ?? "-"}</div>
+            <div><strong>STT last speech at:</strong> {sttState.lastSpeechAt ?? "-"}</div>
             <div><strong>Intent:</strong> {latestTurn?.metadata.intent ?? "-"}</div>
             <div><strong>Entities:</strong> {JSON.stringify(latestTurn?.metadata.entities ?? {}, null, 2)}</div>
             <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>

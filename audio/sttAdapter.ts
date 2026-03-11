@@ -16,10 +16,23 @@ type RecognitionCtor = new () => {
   maxAlternatives: number;
   start: () => void;
   stop: () => void;
-  onresult: ((event: { results?: ArrayLike<ArrayLike<{ transcript?: string; confidence?: number }>> }) => void) | null;
+  onresult: ((event: { results?: ArrayLike<{ isFinal?: boolean; [index: number]: { transcript?: string; confidence?: number } }> }) => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
+
+interface LiveCaptureCallbacks {
+  onInterimTranscript?: (text: string) => void;
+  onFinalTranscript?: (text: string) => void;
+  onSpeechState?: (payload: { isSpeechDetected: boolean; silenceMs: number; recordingStartedAt: number; lastSpeechAt?: number }) => void;
+  onAutoSubmit?: () => void;
+}
+
+interface StartMicOptions extends LiveCaptureCallbacks {
+  language?: string;
+  silenceThresholdMs?: number;
+  speechEnergyThreshold?: number;
+}
 
 declare global {
   interface Window {
@@ -31,13 +44,82 @@ declare global {
 let activeRecognition: InstanceType<RecognitionCtor> | null = null;
 let activeStartTime = 0;
 let activeFinalize: ((result: BrowserMicCaptureResult) => void) | null = null;
+let activeMediaStream: MediaStream | null = null;
+let activeAudioContext: AudioContext | null = null;
+let activeVadRaf: number | null = null;
+
+function cleanupVad() {
+  if (activeVadRaf !== null) {
+    cancelAnimationFrame(activeVadRaf);
+    activeVadRaf = null;
+  }
+  if (activeAudioContext) {
+    void activeAudioContext.close();
+    activeAudioContext = null;
+  }
+  if (activeMediaStream) {
+    activeMediaStream.getTracks().forEach((track) => track.stop());
+    activeMediaStream = null;
+  }
+}
 
 function finalizeCapture(result: BrowserMicCaptureResult) {
   if (!activeFinalize) return;
+  cleanupVad();
   const done = activeFinalize;
   activeFinalize = null;
   activeRecognition = null;
   done(result);
+}
+
+function monitorSpeechEnergy(options: {
+  stream: MediaStream;
+  recordingStartedAt: number;
+  silenceThresholdMs: number;
+  speechEnergyThreshold: number;
+  onSpeechState?: LiveCaptureCallbacks["onSpeechState"];
+  onSilenceTimeout: () => void;
+}) {
+  const { stream, recordingStartedAt, silenceThresholdMs, speechEnergyThreshold, onSpeechState, onSilenceTimeout } = options;
+  const audioContext = new AudioContext();
+  activeAudioContext = audioContext;
+  const source = audioContext.createMediaStreamSource(stream);
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.7;
+  source.connect(analyser);
+
+  const dataArray = new Uint8Array(analyser.fftSize);
+  let lastSpeechAt = recordingStartedAt;
+  let isSpeechDetected = false;
+
+  const tick = () => {
+    analyser.getByteTimeDomainData(dataArray);
+    let sumSquares = 0;
+    for (let i = 0; i < dataArray.length; i += 1) {
+      const normalized = (dataArray[i] - 128) / 128;
+      sumSquares += normalized * normalized;
+    }
+    const rms = Math.sqrt(sumSquares / dataArray.length);
+    const now = Date.now();
+
+    if (rms >= speechEnergyThreshold) {
+      lastSpeechAt = now;
+      isSpeechDetected = true;
+      onSpeechState?.({ isSpeechDetected: true, silenceMs: 0, recordingStartedAt, lastSpeechAt });
+    } else {
+      const silenceMs = now - lastSpeechAt;
+      onSpeechState?.({ isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt: isSpeechDetected ? lastSpeechAt : undefined });
+      if (isSpeechDetected && silenceMs >= silenceThresholdMs) {
+        onSilenceTimeout();
+        return;
+      }
+    }
+
+    activeVadRaf = requestAnimationFrame(tick);
+  };
+
+  tick();
 }
 
 export async function requestMicrophonePermission() {
@@ -54,7 +136,9 @@ export async function requestMicrophonePermission() {
   }
 }
 
-export function startMicrophoneCapture(language = "en-US") {
+export function startMicrophoneCapture(options: StartMicOptions = {}) {
+  const { language = "en-US", silenceThresholdMs = 1000, speechEnergyThreshold = 0.025, onInterimTranscript, onFinalTranscript, onSpeechState, onAutoSubmit } = options;
+
   if (typeof window === "undefined") {
     return {
       ok: false as const,
@@ -80,14 +164,28 @@ export function startMicrophoneCapture(language = "en-US") {
 
   const result = new Promise<BrowserMicCaptureResult>((resolve) => {
     activeFinalize = resolve;
-    let finalTranscript = "";
+    let finalizedTranscript = "";
     let bestConfidence = 0;
 
     recognition.onresult = (event) => {
-      const first = event.results?.[event.results.length - 1]?.[0];
-      if (!first?.transcript) return;
-      finalTranscript = first.transcript.trim();
-      bestConfidence = Math.max(bestConfidence, typeof first.confidence === "number" ? first.confidence : 0.8);
+      const eventResults = event.results;
+      if (!eventResults) return;
+
+      let interim = "";
+      for (let i = 0; i < eventResults.length; i += 1) {
+        const segment = eventResults[i]?.[0];
+        const text = segment?.transcript?.trim();
+        if (!text) continue;
+        if (eventResults[i].isFinal) {
+          finalizedTranscript = `${finalizedTranscript} ${text}`.trim();
+          bestConfidence = Math.max(bestConfidence, typeof segment.confidence === "number" ? segment.confidence : 0.8);
+          onFinalTranscript?.(finalizedTranscript);
+        } else {
+          interim = `${interim} ${text}`.trim();
+        }
+      }
+
+      onInterimTranscript?.(interim);
     };
 
     recognition.onerror = (event) => {
@@ -101,12 +199,13 @@ export function startMicrophoneCapture(language = "en-US") {
     };
 
     recognition.onend = () => {
-      if (finalTranscript) {
+      const transcript = finalizedTranscript.trim();
+      if (transcript) {
         finalizeCapture({
-          transcript: finalTranscript,
+          transcript,
           confidence: bestConfidence || 0.8,
           status: "recognized",
-          timestamps: [{ startMs: 0, endMs: Date.now() - activeStartTime, text: finalTranscript }]
+          timestamps: [{ startMs: 0, endMs: Date.now() - activeStartTime, text: transcript }]
         });
         return;
       }
@@ -123,10 +222,31 @@ export function startMicrophoneCapture(language = "en-US") {
     recognition.start();
   });
 
+  void navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => {
+      activeMediaStream = stream;
+      monitorSpeechEnergy({
+        stream,
+        recordingStartedAt: activeStartTime,
+        silenceThresholdMs,
+        speechEnergyThreshold,
+        onSpeechState,
+        onSilenceTimeout: () => {
+          onAutoSubmit?.();
+          stopMicrophoneCapture();
+        }
+      });
+    })
+    .catch(() => {
+      onSpeechState?.({ isSpeechDetected: false, silenceMs: 0, recordingStartedAt: activeStartTime });
+    });
+
   return { ok: true as const, result };
 }
 
 export function stopMicrophoneCapture() {
+  cleanupVad();
   activeRecognition?.stop();
 }
 
