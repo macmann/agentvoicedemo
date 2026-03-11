@@ -1,6 +1,15 @@
 import { ResponseGenerationContext, SessionState } from "@/types/session";
 
-export function buildResponseContext(state: SessionState): ResponseGenerationContext {
+interface BuildResponseContextInput {
+  state: SessionState;
+  postToolResponseMode: "deterministic" | "llm_generated";
+  groundedToolResultUsed: boolean;
+  previousSession?: SessionState;
+  followupCorrectionTurn: boolean;
+}
+
+export function buildResponseContext(input: BuildResponseContextInput): ResponseGenerationContext {
+  const { state, postToolResponseMode, groundedToolResultUsed, previousSession, followupCorrectionTurn } = input;
   const workflowResult = state.toolResult
     ? state.toolResult.status === "failure"
       ? `Tool ${state.toolResult.toolName} failed: ${String(state.toolResult.error ?? "unknown error")}`
@@ -8,8 +17,16 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
     : "No workflow action executed.";
 
   const pending = state.conversation?.pendingWorkflow;
+  const supportIntent = state.conversation?.activeSupportIntent ?? (state.understanding?.intent === "service_status" ? "service_status" : state.understanding?.intent === "announcements" ? "announcements" : "none");
+  const normalizedToolResult = (state.toolExecution?.normalizedResult ?? state.toolResult?.result ?? undefined) as Record<string, unknown> | undefined;
+  const selectedRegionOrService =
+    (state.conversation?.collectedSlots?.serviceNameOrRegion as string | undefined) ??
+    (normalizedToolResult?.matchedRegion as string | undefined) ??
+    (normalizedToolResult?.matchedServiceName as string | undefined);
 
   return {
+    supportIntent,
+    postToolResponseMode,
     originalUtterance: state.utterance,
     sentiment: state.understanding?.sentiment,
     empathyNeeded: Boolean(state.understanding?.empathyNeeded),
@@ -19,6 +36,17 @@ export function buildResponseContext(state: SessionState): ResponseGenerationCon
     hasPendingQuestion: Boolean(state.conversation?.pendingQuestion),
     workflowPath: state.routing?.decision ?? "no_workflow",
     workflowResult,
+    toolName: state.toolResult?.toolName,
+    normalizedToolResult,
+    selectedRegionOrService,
+    selectedCategory: (state.conversation?.collectedSlots?.serviceCategory as string | undefined) ?? (normalizedToolResult?.matchedCategory as string | undefined),
+    announcementSummary: state.toolResult?.toolName === "fetch_notifications" ? `${((normalizedToolResult?.notifications as Array<unknown> | undefined) ?? []).length} active` : undefined,
+    clarificationStillNeeded: Boolean(state.routing?.decision === "clarify" || state.conversation?.toolClarification?.clarificationNeeded),
+    followupCorrectionTurn,
+    groundedToolResultUsed,
+    previousToolContext: previousSession?.toolExecution
+      ? { toolName: previousSession.toolExecution.selectedTool, normalizedResult: previousSession.toolExecution.normalizedResult }
+      : undefined,
     handoffState: state.handoff?.triggered
       ? `Handoff required: ${state.handoff.reason ?? state.routing?.handoffReason ?? "policy-triggered"}`
       : "No handoff required.",

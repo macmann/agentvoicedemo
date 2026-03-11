@@ -80,6 +80,7 @@ export function OpsQaDashboard() {
       { label: "Tool Mode", value: (config.toolConfig.globalMode ?? "default").toUpperCase(), tone: config.toolConfig.globalMode ?? "default" },
       { label: "Understanding", value: config.understandingMode, tone: config.understandingMode },
       { label: "Intent mode", value: config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic", tone: config.intentUnderstandingMode === "llm_assisted" ? "mixed" : "mock" },
+      { label: "Response", value: config.postToolResponseMode === "llm_generated" ? "LLM-generated" : "Deterministic", tone: config.postToolResponseMode === "llm_generated" ? "mixed" : "mock" },
       { label: "Voice", value: config.voiceModeEnabled ? "On" : "Off", tone: config.voiceModeEnabled ? "success" : "default" },
       { label: "TTS", value: config.ttsProviderMode, tone: config.ttsProviderMode === "openai" ? "api" : "mock" },
       { label: "Silence Timeout", value: `${config.silenceTimeoutMs} ms`, tone: "default" }
@@ -98,6 +99,7 @@ export function OpsQaDashboard() {
     if (prev.toolConfig.globalMode !== config.toolConfig.globalMode) message = `Tool mode switched to ${(config.toolConfig.globalMode ?? "default").toUpperCase()}`;
     else if (prev.understandingMode !== config.understandingMode) message = `Understanding switched to ${config.understandingMode}`;
     else if (prev.intentUnderstandingMode !== config.intentUnderstandingMode) message = `Intent mode switched to ${config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic"}`;
+    else if (prev.postToolResponseMode !== config.postToolResponseMode) message = `Response mode switched to ${config.postToolResponseMode === "llm_generated" ? "LLM-generated" : "Deterministic"}`;
     else if (prev.ttsProviderMode !== config.ttsProviderMode) message = `TTS provider switched to ${config.ttsProviderMode}`;
     else if (prev.voiceModeEnabled !== config.voiceModeEnabled) message = `Voice mode turned ${config.voiceModeEnabled ? "on" : "off"}`;
     else if (prev.silenceTimeoutMs !== config.silenceTimeoutMs) message = `Silence timeout changed to ${config.silenceTimeoutMs} ms`;
@@ -220,16 +222,23 @@ export function OpsQaDashboard() {
               <input type="range" min={300} max={2000} step={50} value={config.silenceTimeoutMs} onChange={(e) => setConfig((prev) => ({ ...prev, silenceTimeoutMs: Number(e.target.value) }))} className="mt-2 w-full accent-blue-600" />
             </label>
             <p className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">Deterministic mode: lower latency, stricter interpretation. LLM-assisted mode: higher latency, better natural-language understanding before deterministic routing guardrails.</p>
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">Deterministic response: lower latency, more rigid wording. LLM-generated response: higher latency, more natural grounded wording after tool execution.</p>
           </PanelCard>
 
           <PanelCard title="Understanding">
             {kv("Provider mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${toneClass(config.understandingMode)}`}>{config.understandingMode}</span>)}
             {kv("Model", config.understandingModel)}
             {kv("Intent mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.intentUnderstandingMode === "llm_assisted" ? toneClass("mixed") : toneClass("mock")}`}>{config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic"}</span>)}
+            {kv("Response mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.postToolResponseMode === "llm_generated" ? toneClass("mixed") : toneClass("mock")}`}>{config.postToolResponseMode === "llm_generated" ? "LLM-generated" : "Deterministic"}</span>)}
             {kv("Mock fallback", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.mockFallbackEnabled ? toneClass("fallback") : toneClass("default")}`}>{String(config.mockFallbackEnabled)}</span>)}
             <label className="block pt-1 text-xs">Intent understanding mode
               <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.intentUnderstandingMode} onChange={(e) => setConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as "deterministic" | "llm_assisted" }))}>
                 <option value="deterministic">deterministic (lower latency, stricter)</option><option value="llm_assisted">llm_assisted (higher latency, more natural)</option>
+              </select>
+            </label>
+            <label className="block pt-1 text-xs">Post-tool response mode
+              <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.postToolResponseMode} onChange={(e) => setConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as "deterministic" | "llm_generated" }))}>
+                <option value="deterministic">deterministic (lower latency, more rigid wording)</option><option value="llm_generated">llm_generated (higher latency, natural grounded wording)</option>
               </select>
             </label>
             <label className="block pt-1 text-xs">Debug verbosity
@@ -387,9 +396,13 @@ export function OpsQaDashboard() {
           </PanelCard>
 
           <PanelCard title="Post-tool Response Generation">
-            {kv("Provider", latest?.session.responseGeneration?.provider ?? "-")}
-            {kv("Model", latest?.session.responseGeneration?.model ?? "-")}
-            {kv("Latency", `${latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs ?? "-"} ms`)}
+            {kv("Provider", latest?.metadata.postToolProvider ?? latest?.session.responseGeneration?.provider ?? "-")}
+            {kv("Model", latest?.metadata.postToolModel ?? latest?.session.responseGeneration?.model ?? "-")}
+            {kv("Mode", latest?.metadata.postToolResponseModeLabel ?? "-")}
+            {kv("Source", latest?.metadata.responseGenerationSource ?? "-")}
+            {kv("LLM used", String(latest?.metadata.postToolLlmUsed ?? false))}
+            {kv("Grounded tool result", String(latest?.metadata.groundedToolResultUsed ?? false))}
+            {kv("Latency", `${latest?.metadata.responseGenerationLatencyMs ?? latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs ?? "-"} ms`)}
             {kv("Tool used", String(Boolean(latest?.metadata.toolCalled)))}
             {kv("Grounded final response", latest?.finalResponseText ?? "-")}
           </PanelCard>

@@ -6,7 +6,7 @@ import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
 import { ToolName } from "@/tools/toolTypes";
 import { useVoiceTester } from "@/state/useVoiceTester";
 import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
-import { IntentUnderstandingMode } from "@/state/useDashboardRuntimeConfig";
+import { IntentUnderstandingMode, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
 
 function StatusPill({ label, active }: { label: string; active: boolean }) {
   return <span className={cn("rounded-full px-2 py-1 text-xs", active ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500")}>{label}</span>;
@@ -68,6 +68,10 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
 
 function intentModeLabel(mode: IntentUnderstandingMode | undefined) {
   return mode === "llm_assisted" ? "LLM-assisted" : "Deterministic";
+}
+
+function responseModeLabel(mode: PostToolResponseMode | undefined) {
+  return mode === "llm_generated" ? "LLM-generated" : "Deterministic";
 }
 
 function yesNo(value?: boolean) {
@@ -142,6 +146,7 @@ export function VoiceTesterPage() {
           <div className="flex items-center gap-2">
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", globalMode === "api" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{globalMode === "api" ? "Live API mode" : "Mock mode"}</span>
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.intentUnderstandingMode === "llm_assisted" ? "bg-violet-100 text-violet-700" : "bg-slate-200 text-slate-700")}>Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
+            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.postToolResponseMode === "llm_generated" ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-700")}>Response: {responseModeLabel(dashboardConfig.postToolResponseMode)}</span>
             <select
               className="rounded-full border border-violet-300 bg-white px-2 py-1 text-xs font-medium text-violet-800"
               value={dashboardConfig.intentUnderstandingMode}
@@ -150,6 +155,15 @@ export function VoiceTesterPage() {
             >
               <option value="deterministic">Deterministic</option>
               <option value="llm_assisted">LLM-assisted</option>
+            </select>
+            <select
+              className="rounded-full border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-800"
+              value={dashboardConfig.postToolResponseMode}
+              onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}
+              aria-label="Post-tool response mode"
+            >
+              <option value="deterministic">Deterministic</option>
+              <option value="llm_generated">LLM-generated</option>
             </select>
             <StatusPill label={statusText} active={status !== "idle"} />
           </div>
@@ -216,6 +230,20 @@ export function VoiceTesterPage() {
                 <p className="text-[11px] text-violet-800">Deterministic: lower latency, stricter interpretation. LLM-assisted: higher latency, better natural-language understanding.</p>
               </div>
             </div>
+            <div className="rounded border border-indigo-200 bg-indigo-50 p-2">
+              <p className="font-semibold">Post-tool response mode</p>
+              <div className="mt-2 grid gap-2">
+                <select
+                  className="w-full rounded border border-indigo-300 bg-white p-1"
+                  value={dashboardConfig.postToolResponseMode}
+                  onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}
+                >
+                  <option value="deterministic">Deterministic</option>
+                  <option value="llm_generated">LLM-generated</option>
+                </select>
+                <p className="text-[11px] text-indigo-800">Deterministic response: lower latency, more rigid wording. LLM-generated response: higher latency, more natural grounded wording.</p>
+              </div>
+            </div>
             <div className="rounded border border-slate-200 p-2">
               <p className="font-semibold">Tool Configuration</p>
               <label className="mt-2 block">
@@ -262,6 +290,13 @@ export function VoiceTesterPage() {
             <div><strong>Request type:</strong> {latestTurn?.metadata.supportRequestType ?? "-"}</div>
             <div><strong>preToolUnderstandingUsed:</strong> {yesNo(latestTurn?.metadata.preToolUnderstandingUsed)}</div>
             <div><strong>intentUnderstandingModeUsed:</strong> {latestTurn?.metadata.intentUnderstandingMode ?? "-"}</div>
+            <div><strong>postToolResponseModeUsed:</strong> {latestTurn?.metadata.postToolResponseModeUsed ?? "-"}</div>
+            <div><strong>postToolLlmUsed:</strong> {yesNo(latestTurn?.metadata.postToolLlmUsed)}</div>
+            <div><strong>responseGenerationSource:</strong> {latestTurn?.metadata.responseGenerationSource ?? "-"}</div>
+            <div><strong>postToolProvider:</strong> {latestTurn?.metadata.postToolProvider ?? "-"}</div>
+            <div><strong>postToolModel:</strong> {latestTurn?.metadata.postToolModel ?? "-"}</div>
+            <div><strong>responseGenerationLatencyMs:</strong> {formatMs(latestTurn?.metadata.responseGenerationLatencyMs)}</div>
+            <div><strong>groundedToolResultUsed:</strong> {yesNo(latestTurn?.metadata.groundedToolResultUsed)}</div>
             <div><strong>preToolProvider:</strong> {latestTurn?.metadata.preToolProvider ?? "-"}</div>
             <div><strong>preToolModel:</strong> {latestTurn?.metadata.preToolModel ?? "-"}</div>
             <div><strong>preToolLatencyMs:</strong> {formatMs(latestTurn?.metadata.preToolLatencyMs)}</div>

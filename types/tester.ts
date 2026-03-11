@@ -30,6 +30,8 @@ export interface TesterDebugState {
   intent?: string;
   intentUnderstandingMode?: "deterministic" | "llm_assisted";
   intentModeLabel?: "Deterministic" | "LLM-assisted";
+  postToolResponseModeUsed?: "deterministic" | "llm_generated";
+  postToolResponseModeLabel?: "Deterministic" | "LLM-generated";
   supportIntent?: "service_status" | "announcements" | "none";
   supportRequestType?: "support_task" | "answer_to_pending_question" | "support_task_continuation" | "support_task_correction" | "conversational_or_meta";
   outOfScopeDemoRequest?: boolean;
@@ -66,6 +68,12 @@ export interface TesterDebugState {
     userFollowup: string;
   };
   preToolProvider?: "openai" | "mock";
+  postToolProvider?: "openai" | "mock";
+  postToolModel?: string;
+  postToolLlmUsed?: boolean;
+  responseGenerationLatencyMs?: number;
+  responseGenerationSource?: "deterministic_template" | "llm_generated";
+  groundedToolResultUsed?: boolean;
   preToolModel?: string;
   preToolUnderstandingUsed?: boolean;
   preToolUsageStatus?: "used" | "disabled_by_mode" | "unavailable_or_failed" | "fallback_to_deterministic";

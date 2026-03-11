@@ -142,6 +142,8 @@ export interface PreToolUnderstandingDiagnostics {
 }
 
 export interface ResponseGenerationContext {
+  supportIntent: "service_status" | "announcements" | "none";
+  postToolResponseMode: "deterministic" | "llm_generated";
   originalUtterance: string;
   sentiment?: string;
   empathyNeeded: boolean;
@@ -151,6 +153,18 @@ export interface ResponseGenerationContext {
   hasPendingQuestion: boolean;
   workflowPath: "workflow" | "no_workflow" | "handoff" | "clarify";
   workflowResult: string;
+  toolName?: string;
+  normalizedToolResult?: Record<string, unknown>;
+  selectedRegionOrService?: string;
+  selectedCategory?: string;
+  announcementSummary?: string;
+  clarificationStillNeeded: boolean;
+  followupCorrectionTurn: boolean;
+  groundedToolResultUsed: boolean;
+  previousToolContext?: {
+    toolName: string;
+    normalizedResult?: unknown;
+  };
   handoffState: string;
   clarificationState: string;
   pendingWorkflowState?: string;
@@ -229,6 +243,7 @@ export interface ConversationState {
 export interface ResponseGenerationDiagnostics {
   provider: "openai" | "mock";
   model: string;
+  source?: "deterministic_template" | "llm_generated";
   toneSettings: string[];
   maxResponseLength: number;
   structuredContext: ResponseGenerationContext;
