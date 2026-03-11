@@ -117,7 +117,7 @@ export function VoiceTesterPage() {
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
             <h1 className="text-lg font-semibold">Voice Testing UI</h1>
-            <p className="text-xs text-slate-500">Product-style support assistant sandbox using deterministic mocked pipeline.</p>
+            <p className="text-xs text-slate-500">This demo supports live service status and announcement queries.</p>
           </div>
           <div className="flex items-center gap-2">
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", globalMode === "api" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{globalMode === "api" ? "Live API mode" : "Mock mode"}</span>
@@ -130,7 +130,7 @@ export function VoiceTesterPage() {
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-          {empty && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Try: “Is there any outage in my area?”, “Core Internet”, “Any announcements today?”, or “I want to speak to a human.”</div>}
+          {empty && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Try: “Is there an outage?”, “Is FTTH in Berlin down?”, “Any upcoming announcements?”, or “I want to speak to a human.”</div>}
           {conversation.messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
@@ -200,6 +200,10 @@ export function VoiceTesterPage() {
             </div>
 
             <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>
+            <div><strong>Support intent:</strong> {latestTurn?.metadata.supportIntent ?? "none"}</div>
+            <div><strong>Request type:</strong> {latestTurn?.metadata.supportRequestType ?? "-"}</div>
+            <div><strong>Out-of-scope demo request:</strong> {String(latestTurn?.metadata.outOfScopeDemoRequest ?? false)}</div>
+            <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
             <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>
             <div><strong>Resolved mode:</strong> {latestTurn?.metadata.toolCalled ? resolveToolMode(latestTurn.metadata.toolCalled as ToolName) : "-"}</div>
             <div><strong>Tool execution mode:</strong> {latestTurn?.metadata.toolExecutionMode ?? "-"}</div>

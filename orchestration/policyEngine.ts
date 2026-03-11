@@ -40,7 +40,12 @@ export function runPolicyEngine(
   providerResult?: SessionState["understandingProviderResult"]
 ) {
   const fallbackSignals = parseScenarioSignals(utterance);
-  const inferredIntent = toKnownIntent(providerResult?.understanding.intent ?? fallbackSignals.intent);
+  const providerIntent = toKnownIntent(providerResult?.understanding.intent);
+  const providerConfidence = providerResult?.understanding.intentConfidence ?? 0;
+  const useFallbackIntent =
+    providerIntent === "unclear" ||
+    (providerConfidence < POLICY_THRESHOLDS.minIntentConfidence && fallbackSignals.intent !== "unclear");
+  const inferredIntent = useFallbackIntent ? fallbackSignals.intent : providerIntent;
   const route = ROUTING_CONFIG[inferredIntent] ?? ROUTING_CONFIG.unclear;
   const turnAct = detectTurnAct(utterance, Boolean(options.pendingQuestion));
 
@@ -58,6 +63,7 @@ export function runPolicyEngine(
   let reason = providerResult?.understanding.reason ?? route.reason;
 
   const explicitHumanRequest = inferredIntent === "talk_to_human" || providerResult?.understanding.handoffRecommended || fallbackSignals.explicitHumanRequest;
+  const demoOutOfScopeSupport = inferredIntent === "unsupported_support";
   const empathyNeeded = providerResult?.understanding.empathyNeeded ?? fallbackSignals.empathyNeeded;
 
   const offTopic = /poem|favorite movie|joke|stock price|politics/.test(utterance.toLowerCase());
@@ -67,10 +73,12 @@ export function runPolicyEngine(
 
   let responseStrategy = strategyForTurnAct(turnAct, inferredIntent, hasActiveTask);
 
-  if (offTopic) {
+  if (offTopic || demoOutOfScopeSupport) {
     responseStrategy = "bounded_redirect";
-    selectedRule = "bounded_support_scope";
-    reason = "Request is outside support scope; politely redirect to support tasks.";
+    selectedRule = demoOutOfScopeSupport ? "demo_scope_out_of_scope_redirect" : "bounded_support_scope";
+    reason = demoOutOfScopeSupport
+      ? "Request is a support task outside this demo scope; redirect to supported intents."
+      : "Request is outside support scope; politely redirect to support tasks.";
   } else if (explicitHumanRequest) {
     selectedRule = "explicit_human_request_always_handoff";
     reason = "User explicitly asked for a human; policy bypasses automation.";

@@ -85,6 +85,29 @@ function inferPendingQuestionFromRouting(routing: NonNullable<SessionState["rout
 function buildGroundedToolResponse(state: SessionState): string | undefined {
   if (state.toolResult?.status !== "success") return undefined;
 
+  if (state.toolResult.toolName === "fetch_service_status") {
+    const services = ((state.toolResult.result as { services?: Array<{ serviceName?: string; region?: string; status?: string }> })?.services ?? []);
+    const query = state.utterance.toLowerCase();
+    const matched = services.find((service) => {
+      const name = (service.serviceName ?? "").toLowerCase();
+      const region = (service.region ?? "").toLowerCase();
+      return (name && query.includes(name)) || (region && query.includes(region));
+    });
+
+    if (matched) {
+      const status = (matched.status ?? "UNKNOWN").replaceAll("_", " ").toLowerCase();
+      const target = [matched.serviceName, matched.region].filter(Boolean).join(" in ");
+      return `${target} is currently ${status}.`;
+    }
+
+    if (!services.length) return "I checked the current service status feed and there are no active outages right now.";
+    const outage = services.find((service) => service.status && service.status !== "OPERATIONAL");
+    if (!outage) return "I checked the current service status feed. Services appear operational right now.";
+    const status = (outage.status ?? "UNKNOWN").replaceAll("_", " ").toLowerCase();
+    const target = [outage.serviceName, outage.region].filter(Boolean).join(" in ");
+    return `I checked the current service status. ${target} is showing ${status}.`;
+  }
+
   if (state.toolResult.toolName === "check_outage_status") {
     const result = (state.toolResult.result ?? {}) as { matchedServiceName?: string; matchedRegion?: string; overallStatus?: string; estimatedRecoveryText?: string; clarificationNeeded?: boolean };
     if (result.clarificationNeeded) return "I couldn’t confidently identify the service or region. Could you tell me the exact service name?";
@@ -406,6 +429,18 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     fillerResponseText,
     metadata: {
       intent: state.understanding?.intent,
+      supportIntent:
+        state.understanding?.intent === "service_status"
+          ? "service_status"
+          : state.understanding?.intent === "announcements"
+            ? "announcements"
+            : "none",
+      supportRequestType:
+        state.understanding?.turnAct === "task_request" &&
+        (state.understanding?.intent === "service_status" || state.understanding?.intent === "announcements" || state.understanding?.intent === "unsupported_support")
+          ? "support_task"
+          : "conversational_or_meta",
+      outOfScopeDemoRequest: state.understanding?.intent === "unsupported_support",
       entities: state.understanding?.entities,
       workflowSelected: state.routing?.workflowName,
       toolCalled: state.toolExecution?.selectedTool,

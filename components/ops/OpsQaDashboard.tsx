@@ -303,11 +303,18 @@ export function OpsQaDashboard() {
 
         <aside className={`space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 text-xs ${monitorPulse ? "ring-2 ring-blue-300" : ""}`}>
           <h2 className="text-sm font-semibold text-slate-800">Monitoring / Observability</h2>
+          <p className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] text-blue-800">
+            This demo supports live service status and announcement queries. Other support actions are intentionally out of scope for this prototype.
+          </p>
 
           <PanelCard title="Conversation State">
             {kv("Intent", latest?.metadata.intent ?? "-")}
+            {kv("Support Intent", latest?.metadata.supportIntent ?? "none")}
+            {kv("Request Type", latest?.metadata.supportRequestType ?? "-")}
+            {kv("Out of Scope", String(latest?.metadata.outOfScopeDemoRequest ?? false))}
             {kv("Turn Act", latest?.metadata.turnAct ?? "-")}
             {kv("Strategy", latest?.metadata.responseStrategy ?? "-")}
+            {kv("Routing", latest?.metadata.routingDecision ?? "-")}
             {kv("Workflow", latest?.metadata.workflowSelected ?? "-")}
             {kv("Pending Q", latest?.metadata.pendingQuestion?.prompt ?? "-")}
             {kv("Missing Slots", (latest?.metadata.missingSlots ?? []).join(", ") || "-")}

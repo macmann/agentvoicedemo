@@ -72,7 +72,7 @@ export function detectTurnAct(utterance: string, hasPendingQuestion: boolean): T
   if (matchesAny(text, META_PATTERNS)) return "meta_question";
   if (matchesAny(text, OFFTOPIC_PATTERNS)) return "small_talk";
   if (hasPendingQuestion && text.length <= 40) return "slot_answer";
-  if (/outage|internet|router|offline|technician|reschedule|announcement|notification|service/.test(text)) return "task_request";
+  if (/outage|internet|offline|announcement|notification|maintenance|notice|service status|service down|reschedule|technician|ticket|diagnostic/.test(text)) return "task_request";
   return "unclear";
 }
 
@@ -83,9 +83,9 @@ export function isSlotNoiseTurnAct(turnAct: TurnAct): boolean {
 export function shouldReplaceWorkflow(turnAct: TurnAct, utterance: string, pendingWorkflowName?: string): boolean {
   if (!pendingWorkflowName) return false;
   const text = utterance.toLowerCase();
-  if (turnAct === "correction" && /want to check.*outage|check.*outage/.test(text) && pendingWorkflowName !== "check_outage_status") return true;
-  if (turnAct === "task_request" && /outage/.test(text) && pendingWorkflowName !== "check_outage_status") return true;
-  if (turnAct === "task_request" && /reschedule|technician/.test(text) && pendingWorkflowName !== "reschedule_technician") return true;
+  if (turnAct === "correction" && /want to check.*(outage|service status)|check.*(outage|service status)/.test(text) && pendingWorkflowName !== "fetch_service_status") return true;
+  if (turnAct === "task_request" && /(outage|service status|service down)/.test(text) && pendingWorkflowName !== "fetch_service_status") return true;
+  if (turnAct === "task_request" && /(announcement|notification|maintenance|notice)/.test(text) && pendingWorkflowName !== "fetch_notifications") return true;
   return false;
 }
 
@@ -138,7 +138,7 @@ export function responseForStrategy(input: {
     case "empathy_then_continue":
       return "I know this is frustrating. Let’s get this sorted.";
     case "bounded_redirect":
-      return "I’m here to help with service and support issues. Tell me what you’d like me to check.";
+      return "Right now I can help with current service status and announcements. I can check either of those for you.";
     case "ask_clarification":
       return input.clarificationPrompt;
     default:

@@ -27,6 +27,9 @@ export interface TesterLatencyMetrics {
 
 export interface TesterDebugState {
   intent?: string;
+  supportIntent?: "service_status" | "announcements" | "none";
+  supportRequestType?: "support_task" | "conversational_or_meta";
+  outOfScopeDemoRequest?: boolean;
   entities?: Record<string, string>;
   workflowSelected?: string;
   toolCalled?: string;
