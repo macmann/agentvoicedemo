@@ -82,6 +82,14 @@ export interface TesterDebugState {
   postToolStructuredSchemaUsed?: boolean;
   postToolJsonSchemaValidationRequested?: boolean;
   groundedToolResultUsed?: boolean;
+  groundedSupportIntent?: "service_status" | "announcements" | "none";
+  groundedToolName?: string;
+  groundedMatchedRegion?: string;
+  groundedMatchedCategory?: string;
+  groundedOverallStatus?: string;
+  groundedServiceStatus?: string;
+  groundedClarificationNeeded?: boolean;
+  groundedClarificationPrompt?: string;
   preToolModel?: string;
   preToolUnderstandingUsed?: boolean;
   preToolUsageStatus?: "used" | "disabled_by_mode" | "unavailable_or_failed" | "fallback_to_deterministic";

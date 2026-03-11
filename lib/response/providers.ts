@@ -6,6 +6,15 @@ const MAX_RESPONSE_LENGTH = 220;
 const TONE_SETTINGS = ["calm", "helpful", "empathetic", "voice-friendly", "concise"];
 const GUARDRAIL_NOTE = "Unsupported facts must not be invented. Use only structured context.";
 
+const RESPONSE_TEXT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["responseText"],
+  properties: {
+    responseText: { type: "string" }
+  }
+} as const;
+
 const CONVERSATIONAL_FALLBACKS: Record<string, string> = {
   greet_and_invite: "Hi — how can I help you today?",
   small_talk_and_invite: "I’m doing well, thanks. What can I help you with today?",
@@ -17,25 +26,50 @@ const CONVERSATIONAL_FALLBACKS: Record<string, string> = {
   empathy_then_continue: "I hear you — that sounds frustrating. I can help with the next step when you’re ready."
 };
 
+function statusLabel(status?: string) {
+  return (status ?? "UNKNOWN").toUpperCase();
+}
+
+function targetLabel(context: ResponseGenerationContext) {
+  return [context.matchedRegion, context.matchedCategory].filter(Boolean).join(" ") || context.selectedRegionOrService || "that service";
+}
+
+function deterministicFromNormalizedResult(context: ResponseGenerationContext): string | undefined {
+  const target = targetLabel(context);
+
+  if (context.clarificationNeeded) {
+    return context.clarificationPrompt ?? context.clarificationState;
+  }
+
+  if (context.supportIntent === "announcements") {
+    const notifications = (context.normalizedToolResult?.notifications as Array<{ title?: string; body?: string }> | undefined) ?? [];
+    if (!notifications.length) return "I checked announcements and there are no active notices right now.";
+    const first = notifications[0];
+    return `There’s one active announcement: ${first.title ?? "Service update"}. ${first.body ?? ""}`.trim();
+  }
+
+  if (context.supportIntent === "service_status" || context.toolName === "check_outage_status") {
+    const normalizedStatus = statusLabel(context.overallStatus ?? context.serviceStatus);
+    if (normalizedStatus === "OPERATIONAL") return `${target} is currently operational.`;
+    if (normalizedStatus === "PARTIAL_OUTAGE") return `${target} is currently experiencing a partial outage.`;
+    if (normalizedStatus === "MAJOR_OUTAGE") return `${target} is currently experiencing a major outage.`;
+    if (normalizedStatus === "MAINTENANCE") return `${target} is currently under maintenance.`;
+  }
+
+  return undefined;
+}
+
 function mockFromContext(context: ResponseGenerationContext) {
   if (context.responseMode === "conversational_only" && context.responseStrategy && CONVERSATIONAL_FALLBACKS[context.responseStrategy]) return CONVERSATIONAL_FALLBACKS[context.responseStrategy];
-  if (context.workflowPath === "clarify") return context.clarificationState;
-  if (context.pendingWorkflowState?.includes("awaiting_input")) return context.clarificationState;
+  if (context.workflowPath === "clarify") return context.clarificationPrompt ?? context.clarificationState;
+  if (context.pendingWorkflowState?.includes("awaiting_input")) return context.clarificationPrompt ?? context.clarificationState;
   if (context.workflowPath === "handoff" || context.handoffState.startsWith("Handoff required")) {
     return "I’m transferring you to a specialist now and sharing your case details so you won’t need to repeat yourself.";
   }
-  if (context.workflowResult.includes("\"overallStatus\":\"PARTIAL_OUTAGE\"")) {
-    return "Yes, Core Internet is currently experiencing a partial outage. We expect recovery in about 2 hours. Is there anything else I can help you with?";
-  }
-  if (context.workflowResult.includes("\"overallStatus\":\"MAJOR_OUTAGE\"")) {
-    return "There is a major outage affecting that service right now. Our teams are actively working on restoration.";
-  }
-  if (context.workflowResult.includes("\"clarificationNeeded\":true")) {
-    return "I couldn’t confidently identify the service or region. Could you tell me the exact service name?";
-  }
-  if (context.workflowResult.includes("fetch_notifications") && context.workflowResult.includes("succeeded")) {
-    return "I checked the latest announcements and found active service notifications. I can read the latest one if you want.";
-  }
+
+  const deterministic = deterministicFromNormalizedResult(context);
+  if (deterministic) return deterministic;
+
   if (context.workflowResult.includes("reschedule_technician") && context.workflowResult.includes("succeeded")) {
     return "I’m sorry you’re not feeling well. Your technician visit has been rescheduled, and I can send a confirmation if you’d like.";
   }
@@ -69,6 +103,24 @@ export async function generateResponseWithMock(context: ResponseGenerationContex
   };
 }
 
+function buildLlmUserContext(context: ResponseGenerationContext) {
+  return {
+    supportIntent: context.supportIntent,
+    toolName: context.toolName,
+    normalizedToolResult: context.normalizedToolResult,
+    matchedRegion: context.matchedRegion,
+    matchedCategory: context.matchedCategory,
+    overallStatus: context.overallStatus,
+    serviceStatus: context.serviceStatus,
+    clarificationNeeded: context.clarificationNeeded,
+    clarificationPrompt: context.clarificationPrompt,
+    originalUtterance: context.originalUtterance,
+    responseMode: context.responseMode,
+    policyInstructions: context.policyInstructions,
+    priorContext: context.followupCorrectionTurn || context.hasPendingQuestion ? context.previousToolContext : undefined
+  };
+}
+
 export async function generateResponseWithOpenAI(context: ResponseGenerationContext): Promise<ResponseGenerationDiagnostics> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.trim().length < 20) {
@@ -93,16 +145,24 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
           content: [
             {
               type: "input_text",
-              text: "You generate customer-support voice replies. Output must be strictly grounded in normalizedToolResult/context and never add unsupported facts. Be concise and natural. Correctly distinguish OPERATIONAL vs PARTIAL_OUTAGE vs MAJOR_OUTAGE vs MAINTENANCE. Never say outage wording for OPERATIONAL. Ask at most one follow-up question only when clarificationStillNeeded=true."
+              text: "You generate customer-support voice replies grounded only in the supplied context. For service_status: OPERATIONAL means no broader outage; PARTIAL_OUTAGE means partial outage; MAJOR_OUTAGE means major outage; MAINTENANCE means maintenance. If clarificationNeeded=true, ask exactly clarificationPrompt and do not add generic fallback copy. Keep answers natural and concise."
             }
           ]
         },
         {
           role: "user",
-          content: [{ type: "input_text", text: JSON.stringify(context) }]
+          content: [{ type: "input_text", text: JSON.stringify(buildLlmUserContext(context)) }]
         }
       ],
-      max_output_tokens: 110
+      text: {
+        format: {
+          type: "json_schema",
+          name: "posttool_response",
+          strict: true,
+          schema: RESPONSE_TEXT_SCHEMA
+        }
+      },
+      max_output_tokens: 130
     };
 
     const response = await fetch(endpoint, {
@@ -116,7 +176,7 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
       const mock = await generateResponseWithMock(context);
       return {
         ...mock,
-        fallbackBehavior: `OpenAI error ${response.status}; mock response used.`,
+        fallbackBehavior: `OpenAI error ${response.status}; deterministic response used.`,
         failureStage: "post_tool",
         failureCategory: "http_error",
         failureStatusCode: response.status,
@@ -124,18 +184,38 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
         endpointPath: OPENAI_ENDPOINT_PATH,
         model: OPENAI_MODEL,
         requestPayloadBuilt: true,
-        structuredSchemaUsed: false,
-        jsonSchemaValidationRequested: false,
+        structuredSchemaUsed: true,
+        jsonSchemaValidationRequested: true,
         fallbackOccurred: true
       };
     }
 
     const payload = (await response.json()) as { output_text?: string };
-    const rawText = payload.output_text?.trim() || (await generateResponseWithMock(context)).finalResponseText;
-    const sanitizedText = rawText
-      .replace(/experiencing\s+a\s+operational/gi, "operational")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+    let parsed: { responseText?: string } = {};
+    if (payload.output_text) {
+      try {
+        parsed = JSON.parse(payload.output_text) as { responseText?: string };
+      } catch {
+        const mock = await generateResponseWithMock(context);
+        return {
+          ...mock,
+          fallbackBehavior: "OpenAI output was not valid JSON; deterministic response used.",
+          failureStage: "post_tool",
+          failureCategory: "invalid_json",
+          failureResponseBody: payload.output_text.slice(0, 1200),
+          endpointPath: OPENAI_ENDPOINT_PATH,
+          model: OPENAI_MODEL,
+          requestPayloadBuilt: true,
+          structuredSchemaUsed: true,
+          jsonSchemaValidationRequested: true,
+          fallbackOccurred: true
+        };
+      }
+    }
+
+    const candidate = typeof parsed.responseText === "string" ? parsed.responseText.trim() : "";
+    const fallbackText = deterministicFromNormalizedResult(context) ?? (await generateResponseWithMock(context)).finalResponseText;
+    const finalText = (candidate || fallbackText).replace(/\s{2,}/g, " ").trim().slice(0, MAX_RESPONSE_LENGTH);
 
     return {
       provider: "openai",
@@ -144,30 +224,30 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
       stage: "post_tool",
       endpointPath: OPENAI_ENDPOINT_PATH,
       requestPayloadBuilt: true,
-      structuredSchemaUsed: false,
-      jsonSchemaValidationRequested: false,
+      structuredSchemaUsed: true,
+      jsonSchemaValidationRequested: true,
       fallbackOccurred: false,
       toneSettings: TONE_SETTINGS,
       maxResponseLength: MAX_RESPONSE_LENGTH,
       structuredContext: context,
-      finalResponseText: sanitizedText.slice(0, MAX_RESPONSE_LENGTH),
+      finalResponseText: finalText,
       guardrailNote: GUARDRAIL_NOTE,
-      fallbackBehavior: "If unavailable, fallback to deterministic mock response."
+      fallbackBehavior: "If unavailable, fallback to deterministic response."
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const mock = await generateResponseWithMock(context);
     return {
       ...mock,
-      fallbackBehavior: "OpenAI request failed; mock response used.",
+      fallbackBehavior: "OpenAI request failed; deterministic response used.",
       failureStage: "post_tool",
       failureCategory: "network_error",
       failureResponseBody: errorMessage,
       endpointPath: OPENAI_ENDPOINT_PATH,
       model: OPENAI_MODEL,
       requestPayloadBuilt: true,
-      structuredSchemaUsed: false,
-      jsonSchemaValidationRequested: false,
+      structuredSchemaUsed: true,
+      jsonSchemaValidationRequested: true,
       fallbackOccurred: true
     };
   }

@@ -167,6 +167,12 @@ export interface ResponseGenerationContext {
   workflowResult: string;
   toolName?: string;
   normalizedToolResult?: Record<string, unknown>;
+  matchedRegion?: string;
+  matchedCategory?: string;
+  overallStatus?: string;
+  serviceStatus?: string;
+  clarificationNeeded?: boolean;
+  clarificationPrompt?: string;
   selectedRegionOrService?: string;
   selectedCategory?: string;
   announcementSummary?: string;

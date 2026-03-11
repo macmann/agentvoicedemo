@@ -421,8 +421,17 @@ export function OpsQaDashboard() {
             {kv("Failure body", latest?.metadata.postToolFailureResponseBody ?? "-")}
             {kv("LLM used", String(latest?.metadata.postToolLlmUsed ?? false))}
             {kv("Grounded tool result", String(latest?.metadata.groundedToolResultUsed ?? false))}
+            {kv("Grounded supportIntent", latest?.metadata.groundedSupportIntent ?? "-")}
+            {kv("Grounded toolName", latest?.metadata.groundedToolName ?? "-")}
+            {kv("Grounded matchedRegion", latest?.metadata.groundedMatchedRegion ?? "-")}
+            {kv("Grounded matchedCategory", latest?.metadata.groundedMatchedCategory ?? "-")}
+            {kv("Grounded overallStatus", latest?.metadata.groundedOverallStatus ?? "-")}
+            {kv("Grounded serviceStatus", latest?.metadata.groundedServiceStatus ?? "-")}
+            {kv("Grounded clarificationNeeded", String(latest?.metadata.groundedClarificationNeeded ?? false))}
+            {kv("Grounded clarificationPrompt", latest?.metadata.groundedClarificationPrompt ?? "-")}
             {kv("Latency", `${latest?.metadata.responseGenerationLatencyMs ?? latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs ?? "-"} ms`)}
             {kv("Tool used", String(Boolean(latest?.metadata.toolCalled)))}
+            {kv("Normalized snapshot", JSON.stringify(latest?.metadata.normalizedToolResult ?? {}))}
             {kv("Grounded final response", latest?.finalResponseText ?? "-")}
           </PanelCard>
 

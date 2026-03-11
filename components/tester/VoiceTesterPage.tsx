@@ -305,6 +305,14 @@ export function VoiceTesterPage() {
             <div><strong>postToolJsonSchemaValidationRequested:</strong> {String(latestTurn?.metadata.postToolJsonSchemaValidationRequested ?? false)}</div>
             <div><strong>postToolFailureResponseBody:</strong> {latestTurn?.metadata.postToolFailureResponseBody ?? "-"}</div>
             <div><strong>groundedToolResultUsed:</strong> {yesNo(latestTurn?.metadata.groundedToolResultUsed)}</div>
+            <div><strong>groundedSupportIntent:</strong> {latestTurn?.metadata.groundedSupportIntent ?? "-"}</div>
+            <div><strong>groundedToolName:</strong> {latestTurn?.metadata.groundedToolName ?? "-"}</div>
+            <div><strong>groundedMatchedRegion:</strong> {latestTurn?.metadata.groundedMatchedRegion ?? "-"}</div>
+            <div><strong>groundedMatchedCategory:</strong> {latestTurn?.metadata.groundedMatchedCategory ?? "-"}</div>
+            <div><strong>groundedOverallStatus:</strong> {latestTurn?.metadata.groundedOverallStatus ?? "-"}</div>
+            <div><strong>groundedServiceStatus:</strong> {latestTurn?.metadata.groundedServiceStatus ?? "-"}</div>
+            <div><strong>groundedClarificationNeeded:</strong> {String(latestTurn?.metadata.groundedClarificationNeeded ?? false)}</div>
+            <div><strong>groundedClarificationPrompt:</strong> {latestTurn?.metadata.groundedClarificationPrompt ?? "-"}</div>
             <div><strong>preToolProvider:</strong> {latestTurn?.metadata.preToolProvider ?? "-"}</div>
             <div><strong>preToolModel:</strong> {latestTurn?.metadata.preToolModel ?? "-"}</div>
             <div><strong>preToolProviderSelectionReason:</strong> {latestTurn?.metadata.preToolProviderSelectionReason ?? "-"}</div>
