@@ -101,6 +101,30 @@ export function resolvePendingQuestionAnswer(utterance: string, pendingQuestion?
   return { matched: false, confidence: "low", reason: "no_match" };
 }
 
+
+function extractServiceRegionValue(utterance: string): string | undefined {
+  const lowered = utterance.toLowerCase().trim();
+  const directRegion = lowered.match(/(?:my home is in|service in|in|for)\s+([a-z][a-z\s-]{1,30})$/i)?.[1]?.trim();
+  if (directRegion) {
+    return directRegion
+      .split(/\s+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  if (/^(?:no,?\s+|yeah,?\s+)?[a-z][a-z\s-]{1,30}$/i.test(lowered)) {
+    const bare = lowered.replace(/^(?:no,?\s+|yeah,?\s+)?/, "").trim();
+    if (bare && bare.split(/\s+/).length <= 3) {
+      return bare
+        .split(/\s+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+    }
+  }
+
+  return undefined;
+}
+
 function extractConversationSlots(utterance: string): Record<string, string> {
   const slots: Record<string, string> = {};
   const lowered = utterance.toLowerCase().trim();
@@ -115,7 +139,10 @@ function extractConversationSlots(utterance: string): Record<string, string> {
   if (lowered.includes("today")) slots.date = "today";
   if (lowered.includes("tomorrow")) slots.date = "tomorrow";
 
-  if (REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token))) {
+  const explicitRegion = extractServiceRegionValue(utterance);
+  if (explicitRegion) {
+    slots.serviceNameOrRegion = explicitRegion;
+  } else if (REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token))) {
     slots.serviceNameOrRegion = utterance.trim();
     slots.serviceNameOrDevice = utterance.trim();
   }
@@ -199,6 +226,12 @@ export function deriveConversationState(input: {
     turns,
     currentStatus: input.handoff?.triggered ? "handoff" : input.dialogueState === "awaiting_missing_info" ? "awaiting_user_input" : "processing",
     activeIntent: input.intent,
+    activeSupportIntent:
+      input.intent === "service_status" || input.intent === "announcements"
+        ? input.intent
+        : input.intent === "talk_to_human" || /reset|start over|new request/i.test(input.utterance)
+          ? undefined
+          : input.previous?.activeSupportIntent,
     pendingWorkflow,
     pendingQuestion: input.pendingQuestion,
     pendingSlots: pendingWorkflow?.missingSlots ?? [],

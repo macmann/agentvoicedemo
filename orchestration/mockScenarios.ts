@@ -18,9 +18,19 @@ export interface ScenarioSignals {
 function extractServiceOrRegion(text: string): string | undefined {
   if (text.includes("ftth")) return "FTTH";
   if (text.includes("berlin")) return "Berlin";
+  if (text.includes("munich")) return "Munich";
   if (text.includes("core internet")) return "Core Internet";
   if (text.includes("downtown")) return "Downtown";
   if (text.includes("mobile")) return "Mobile";
+
+  const compactRegion = text.match(/^(?:no,?\s+|yeah,?\s+)?([a-z][a-z\s-]{1,30})$/i)?.[1]?.trim();
+  if (compactRegion && compactRegion.split(/\s+/).length <= 3) {
+    return compactRegion
+      .split(/\s+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
   return undefined;
 }
 
@@ -30,7 +40,7 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
   const explicitHumanRequest = text.includes("talk to a human") || text.includes("speak to a human") || turnAct === "handoff_request";
   const discomfortDetected = text.includes("sick") || text.includes("not feeling well") || text.includes("unwell");
   const frustration = text.includes("frustrating") || text.includes("upset") || text.includes("angry") || turnAct === "emotion" || turnAct === "objection";
-  const outage = text.includes("outage") || text.includes("service down") || text.includes("internet is down") || text.includes("current status") || text.includes("service status") || text.includes("ftth") || text.includes("down?");
+  const outage = text.includes("outage") || text.includes("service down") || text.includes("internet is down") || text.includes("current status") || text.includes("service status") || text.includes("ftth") || text.includes("down?") || /^no,?\s+[a-z]/.test(text) || /service in [a-z]/.test(text) || /my home is in [a-z]/.test(text);
   const announcements = text.includes("announcement") || text.includes("notification") || text.includes("maintenance") || text.includes("notice");
   const unsupportedSupport = text.includes("reschedule") || text.includes("technician") || text.includes("support ticket") || text.includes("create a ticket") || text.includes("diagnostic") || text.includes("run diagnostics");
   const sttFailureHint = text.includes("[unclear]") || text.includes("mumble");

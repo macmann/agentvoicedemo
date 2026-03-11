@@ -28,8 +28,13 @@ export interface TesterLatencyMetrics {
 export interface TesterDebugState {
   intent?: string;
   supportIntent?: "service_status" | "announcements" | "none";
-  supportRequestType?: "support_task" | "conversational_or_meta";
+  supportRequestType?: "support_task" | "answer_to_pending_question" | "support_task_continuation" | "support_task_correction" | "conversational_or_meta";
   outOfScopeDemoRequest?: boolean;
+  activeSupportIntent?: "service_status" | "announcements";
+  continuationDetected?: boolean;
+  correctedSlots?: Record<string, string>;
+  previousToolContext?: { toolName: string; requestPayload?: unknown; normalizedResult?: unknown };
+  supportIntentTransition?: "preserved" | "reset" | "reset_to_new_support_intent";
   entities?: Record<string, string>;
   workflowSelected?: string;
   toolCalled?: string;
@@ -65,7 +70,7 @@ export interface TesterDebugState {
     reason: "matched" | "ambiguous" | "no_match";
   };
   normalizedSlotValue?: string;
-  turnHandlingMode?: "answer_to_pending_question" | "fresh_intent_turn";
+  turnHandlingMode?: "answer_to_pending_question" | "fresh_intent_turn" | "support_task_continuation" | "support_task_correction";
   missingSlots?: string[];
   collectedSlots?: Record<string, string>;
   ttsProviderMode?: "mock_browser" | "openai";

@@ -201,7 +201,12 @@ export function VoiceTesterPage() {
 
             <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>
             <div><strong>Support intent:</strong> {latestTurn?.metadata.supportIntent ?? "none"}</div>
+            <div><strong>Active support intent:</strong> {latestTurn?.metadata.activeSupportIntent ?? "-"}</div>
             <div><strong>Request type:</strong> {latestTurn?.metadata.supportRequestType ?? "-"}</div>
+            <div><strong>Continuation detected:</strong> {String(latestTurn?.metadata.continuationDetected ?? false)}</div>
+            <div><strong>Corrected slots:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.correctedSlots ?? {}, null, 2)}</pre></div>
+            <div><strong>Support intent transition:</strong> {latestTurn?.metadata.supportIntentTransition ?? "-"}</div>
+            <div><strong>Previous tool context:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.previousToolContext ?? {}, null, 2)}</pre></div>
             <div><strong>Out-of-scope demo request:</strong> {String(latestTurn?.metadata.outOfScopeDemoRequest ?? false)}</div>
             <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
             <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>
