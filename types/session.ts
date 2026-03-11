@@ -91,6 +91,15 @@ export interface PendingWorkflowState {
   attempts: number;
 }
 
+export interface PendingQuestionState {
+  questionType: string;
+  expectedSlot: string;
+  workflowName: PendingWorkflowState["workflowName"];
+  prompt: string;
+  askedAtTurnId?: string;
+  retryCount: number;
+}
+
 export interface ConversationTurn {
   id: string;
   role: "user" | "assistant" | "system";
@@ -113,6 +122,7 @@ export interface ConversationState {
   currentStatus: "idle" | "listening" | "processing" | "awaiting_user_input" | "speaking" | "handoff";
   activeIntent?: string;
   pendingWorkflow?: PendingWorkflowState;
+  pendingQuestion?: PendingQuestionState;
   pendingSlots: string[];
   collectedSlots: Record<string, string>;
   lastAssistantQuestion?: string;

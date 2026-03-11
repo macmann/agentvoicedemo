@@ -1,4 +1,4 @@
-import { SessionState } from "@/types/session";
+import { PendingQuestionState, SessionState } from "@/types/session";
 
 export type TesterSpeakerRole = "user" | "assistant" | "system";
 export type TesterInputSource = "text" | "microphone";
@@ -20,6 +20,17 @@ export interface TesterDebugState {
   toolExecutionMode?: "mock" | "api";
   pendingWorkflow?: string;
   pendingWorkflowStatus?: string;
+  pendingQuestion?: PendingQuestionState;
+  expectedSlot?: string;
+  slotResolutionResult?: {
+    matched: boolean;
+    confidence: "high" | "medium" | "low";
+    normalizedValue?: string;
+    rawValue?: string;
+    reason: "matched" | "ambiguous" | "no_match";
+  };
+  normalizedSlotValue?: string;
+  turnHandlingMode?: "answer_to_pending_question" | "fresh_intent_turn";
   missingSlots?: string[];
   collectedSlots?: Record<string, string>;
   latency: {
