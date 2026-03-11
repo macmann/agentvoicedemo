@@ -33,6 +33,10 @@ OPENAI_UNDERSTANDING_MODEL=gpt-5-mini
 
 # Optional override; defaults to https://api.openai.com/v1
 OPENAI_BASE_URL=https://api.openai.com/v1
+
+# Optional: pre-tool provider, defaults to mock
+# Set to openai only if your provider supports this endpoint
+OPENAI_PRETOOL_PROVIDER=mock
 ```
 
 ### Mock mode (no API key)
