@@ -4,6 +4,26 @@ export type TesterSpeakerRole = "user" | "assistant" | "system";
 export type TesterInputSource = "text" | "microphone";
 export type TurnStatus = "idle" | "listening" | "thinking" | "tool" | "speaking" | "error";
 export type PlaybackStatus = "idle" | "playing" | "stopped" | "unavailable";
+export type VoicePhase = "idle" | "listening" | "processing" | "checking_tool" | "speaking_filler" | "speaking_final" | "error";
+
+export interface TesterLatencyMetrics {
+  sttFinalizationMs?: number;
+  understandingMs?: number;
+  routingPolicyMs?: number;
+  toolExecutionMs?: number;
+  responseGenerationMs?: number;
+  ttsFirstAudioMs?: number;
+  ttsCompletionMs?: number;
+  totalTurnMs?: number;
+  ttfaMs?: number;
+  fillerTtsFirstAudioMs?: number;
+  fillerSpeechOverlapMs?: number;
+  sttMs?: number;
+  toolMs?: number;
+  responseMs?: number;
+  ttsMs?: number;
+  totalMs?: number;
+}
 
 export interface TesterDebugState {
   intent?: string;
@@ -33,14 +53,11 @@ export interface TesterDebugState {
   turnHandlingMode?: "answer_to_pending_question" | "fresh_intent_turn";
   missingSlots?: string[];
   collectedSlots?: Record<string, string>;
-  latency: {
-    sttMs?: number;
-    understandingMs?: number;
-    toolMs?: number;
-    responseMs?: number;
-    ttsMs?: number;
-    totalMs?: number;
-  };
+  ttsProviderMode?: "mock_browser" | "openai";
+  fillerUsed?: boolean;
+  fillerText?: string;
+  voicePhase?: VoicePhase;
+  latency: TesterLatencyMetrics;
 }
 
 export interface TesterTurnRecord {

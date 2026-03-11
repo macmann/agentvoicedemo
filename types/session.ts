@@ -241,8 +241,18 @@ export interface SessionState {
     };
   };
   latency?: {
-    sttMs?: number;
+    sttFinalizationMs?: number;
     understandingMs?: number;
+    routingPolicyMs?: number;
+    toolExecutionMs?: number;
+    responseGenerationMs?: number;
+    ttsFirstAudioMs?: number;
+    ttsCompletionMs?: number;
+    totalTurnMs?: number;
+    ttfaMs?: number;
+    fillerTtsFirstAudioMs?: number;
+    fillerSpeechOverlapMs?: number;
+    sttMs?: number;
     toolMs?: number;
     responseMs?: number;
     ttsMs?: number;
