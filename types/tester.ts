@@ -9,6 +9,7 @@ export type VoicePhase = "idle" | "listening" | "processing" | "checking_tool" |
 export interface TesterLatencyMetrics {
   sttFinalizationMs?: number;
   understandingMs?: number;
+  preToolUnderstandingMs?: number;
   routingPolicyMs?: number;
   toolExecutionMs?: number;
   responseGenerationMs?: number;
@@ -27,6 +28,8 @@ export interface TesterLatencyMetrics {
 
 export interface TesterDebugState {
   intent?: string;
+  intentUnderstandingMode?: "deterministic" | "llm_assisted";
+  intentModeLabel?: "Deterministic" | "LLM-assisted";
   supportIntent?: "service_status" | "announcements" | "none";
   supportRequestType?: "support_task" | "answer_to_pending_question" | "support_task_continuation" | "support_task_correction" | "conversational_or_meta";
   outOfScopeDemoRequest?: boolean;
@@ -62,6 +65,17 @@ export interface TesterDebugState {
     explicitHumanRequest: boolean;
     userFollowup: string;
   };
+  preToolProvider?: "openai" | "mock";
+  preToolModel?: string;
+  preToolInferredSupportIntent?: "service_status" | "announcements" | "none";
+  preToolTurnAct?: string;
+  preToolClarificationNeeded?: boolean;
+  preToolClarificationQuestion?: string;
+  preToolEntities?: Record<string, string>;
+  preToolContinuationDetected?: boolean;
+  preToolCorrectionDetected?: boolean;
+  preToolHandoffRecommended?: boolean;
+  preToolReason?: string;
   providerMode: "mock" | "live" | "mixed";
   toolExecutionMode?: "mock" | "api";
   toolEndpoint?: string;

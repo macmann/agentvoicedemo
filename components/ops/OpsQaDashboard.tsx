@@ -79,6 +79,7 @@ export function OpsQaDashboard() {
     () => [
       { label: "Tool Mode", value: (config.toolConfig.globalMode ?? "default").toUpperCase(), tone: config.toolConfig.globalMode ?? "default" },
       { label: "Understanding", value: config.understandingMode, tone: config.understandingMode },
+      { label: "Intent mode", value: config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic", tone: config.intentUnderstandingMode === "llm_assisted" ? "mixed" : "mock" },
       { label: "Voice", value: config.voiceModeEnabled ? "On" : "Off", tone: config.voiceModeEnabled ? "success" : "default" },
       { label: "TTS", value: config.ttsProviderMode, tone: config.ttsProviderMode === "openai" ? "api" : "mock" },
       { label: "Silence Timeout", value: `${config.silenceTimeoutMs} ms`, tone: "default" }
@@ -96,6 +97,7 @@ export function OpsQaDashboard() {
     let message: string | null = null;
     if (prev.toolConfig.globalMode !== config.toolConfig.globalMode) message = `Tool mode switched to ${(config.toolConfig.globalMode ?? "default").toUpperCase()}`;
     else if (prev.understandingMode !== config.understandingMode) message = `Understanding switched to ${config.understandingMode}`;
+    else if (prev.intentUnderstandingMode !== config.intentUnderstandingMode) message = `Intent mode switched to ${config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic"}`;
     else if (prev.ttsProviderMode !== config.ttsProviderMode) message = `TTS provider switched to ${config.ttsProviderMode}`;
     else if (prev.voiceModeEnabled !== config.voiceModeEnabled) message = `Voice mode turned ${config.voiceModeEnabled ? "on" : "off"}`;
     else if (prev.silenceTimeoutMs !== config.silenceTimeoutMs) message = `Silence timeout changed to ${config.silenceTimeoutMs} ms`;
@@ -131,6 +133,7 @@ export function OpsQaDashboard() {
       { label: "User Speech", latency: l.sttFinalizationMs ?? l.sttMs },
       { label: "STT Finalized", latency: l.sttFinalizationMs ?? l.sttMs },
       { label: "Understanding", latency: l.understandingMs },
+      { label: "Pre-tool LLM", latency: l.preToolUnderstandingMs },
       { label: "Routing Decision", latency: l.routingPolicyMs },
       { label: "Tool Execution", latency: l.toolExecutionMs ?? l.toolMs },
       { label: "Response Generation", latency: l.responseGenerationMs ?? l.responseMs },
@@ -216,12 +219,19 @@ export function OpsQaDashboard() {
             <label className="block text-xs">Silence timeout: <span className="font-semibold">{config.silenceTimeoutMs} ms</span>
               <input type="range" min={300} max={2000} step={50} value={config.silenceTimeoutMs} onChange={(e) => setConfig((prev) => ({ ...prev, silenceTimeoutMs: Number(e.target.value) }))} className="mt-2 w-full accent-blue-600" />
             </label>
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">Deterministic mode: lower latency, stricter interpretation. LLM-assisted mode: higher latency, better natural-language understanding before deterministic routing guardrails.</p>
           </PanelCard>
 
           <PanelCard title="Understanding">
             {kv("Provider mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${toneClass(config.understandingMode)}`}>{config.understandingMode}</span>)}
             {kv("Model", config.understandingModel)}
+            {kv("Intent mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.intentUnderstandingMode === "llm_assisted" ? toneClass("mixed") : toneClass("mock")}`}>{config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic"}</span>)}
             {kv("Mock fallback", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.mockFallbackEnabled ? toneClass("fallback") : toneClass("default")}`}>{String(config.mockFallbackEnabled)}</span>)}
+            <label className="block pt-1 text-xs">Intent understanding mode
+              <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.intentUnderstandingMode} onChange={(e) => setConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as "deterministic" | "llm_assisted" }))}>
+                <option value="deterministic">deterministic (lower latency, stricter)</option><option value="llm_assisted">llm_assisted (higher latency, more natural)</option>
+              </select>
+            </label>
             <label className="block pt-1 text-xs">Debug verbosity
               <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.debugVerbosity} onChange={(e) => setConfig((prev) => ({ ...prev, debugVerbosity: e.target.value as "basic" | "detailed" }))}>
                 <option value="basic">basic</option><option value="detailed">detailed</option>
@@ -318,6 +328,7 @@ export function OpsQaDashboard() {
             {kv("Previous Tool Context", JSON.stringify(latest?.metadata.previousToolContext ?? {}))}
             {kv("Out of Scope", String(latest?.metadata.outOfScopeDemoRequest ?? false))}
             {kv("Turn Act", latest?.metadata.turnAct ?? "-")}
+            {kv("Intent Mode", latest?.metadata.intentModeLabel ?? "-")}
             {kv("Strategy", latest?.metadata.responseStrategy ?? "-")}
             {kv("Routing", latest?.metadata.routingDecision ?? "-")}
             {kv("Workflow", latest?.metadata.workflowSelected ?? "-")}
@@ -340,6 +351,18 @@ export function OpsQaDashboard() {
             {kv("Preserved Support Context", JSON.stringify(latest?.metadata.preservedSupportContext ?? {}))}
           </PanelCard>
 
+          <PanelCard title="Pre-tool Understanding">
+            {kv("Intent mode", latest?.metadata.intentModeLabel ?? "-")}
+            {kv("Provider", latest?.metadata.preToolProvider ?? "-")}
+            {kv("Model", latest?.metadata.preToolModel ?? "-")}
+            {kv("Inferred Support Intent", latest?.metadata.preToolInferredSupportIntent ?? "-")}
+            {kv("Turn Act", latest?.metadata.preToolTurnAct ?? "-")}
+            {kv("Clarification Needed", String(latest?.metadata.preToolClarificationNeeded ?? false))}
+            {kv("Clarification Question", latest?.metadata.preToolClarificationQuestion ?? "-")}
+            {kv("Entities", JSON.stringify(latest?.metadata.preToolEntities ?? {}))}
+            {kv("Latency", `${latest?.metadata.latency?.preToolUnderstandingMs ?? "-"} ms`)}
+          </PanelCard>
+
           <PanelCard title="Tool Execution">
             {kv("Tool Name", latest?.metadata.toolCalled ?? "-")}
             {kv("Mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${latest?.metadata.toolExecutionMode === "api" ? toneClass("api") : toneClass("mock")}`}>{latest?.metadata.toolExecutionMode ?? "-"}</span>)}
@@ -358,6 +381,14 @@ export function OpsQaDashboard() {
             </details>
           </PanelCard>
 
+          <PanelCard title="Post-tool Response Generation">
+            {kv("Provider", latest?.session.responseGeneration?.provider ?? "-")}
+            {kv("Model", latest?.session.responseGeneration?.model ?? "-")}
+            {kv("Latency", `${latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs ?? "-"} ms`)}
+            {kv("Tool used", String(Boolean(latest?.metadata.toolCalled)))}
+            {kv("Grounded final response", latest?.finalResponseText ?? "-")}
+          </PanelCard>
+
           <PanelCard title="Voice Metrics">
             {kv("STT Mode", tester.sttState.providerMode)}
             {kv("TTFA", `${latest?.metadata.latency?.ttfaMs ?? "-"} ms`)}
@@ -369,6 +400,7 @@ export function OpsQaDashboard() {
             {[
               ["STT", latest?.metadata.latency?.sttFinalizationMs ?? latest?.metadata.latency?.sttMs],
               ["Understanding", latest?.metadata.latency?.understandingMs],
+              ["Pre-tool", latest?.metadata.latency?.preToolUnderstandingMs],
               ["Routing", latest?.metadata.latency?.routingPolicyMs],
               ["Tool", latest?.metadata.latency?.toolExecutionMs ?? latest?.metadata.latency?.toolMs],
               ["Response", latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs],

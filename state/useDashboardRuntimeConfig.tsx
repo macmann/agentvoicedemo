@@ -7,10 +7,12 @@ import { ToolExecutionMode, ToolName } from "@/tools/toolTypes";
 export type DebugVerbosity = "basic" | "detailed";
 export type UnderstandingMode = "mock" | "live" | "mixed";
 export type TtsProviderMode = "mock_browser" | "openai";
+export type IntentUnderstandingMode = "deterministic" | "llm_assisted";
 
 export interface DashboardRuntimeConfig {
   toolConfig: RuntimeToolConfig;
   understandingMode: UnderstandingMode;
+  intentUnderstandingMode: IntentUnderstandingMode;
   understandingModel: string;
   mockFallbackEnabled: boolean;
   voiceModeEnabled: boolean;
@@ -28,6 +30,7 @@ export const DASHBOARD_RUNTIME_STORAGE_KEY = "voiceai.dashboard.runtime.config.v
 const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   toolConfig: {},
   understandingMode: "mixed",
+  intentUnderstandingMode: "deterministic",
   understandingModel: "gpt-5-mini",
   mockFallbackEnabled: true,
   voiceModeEnabled: true,
@@ -58,19 +61,21 @@ const RuntimeContext = createContext<RuntimeContextValue | undefined>(undefined)
 
 function sanitizeConfig(raw: unknown): DashboardRuntimeConfig {
   const candidate = (raw ?? {}) as Partial<DashboardRuntimeConfig>;
+  const intentUnderstandingMode = candidate.intentUnderstandingMode === "llm_assisted" ? "llm_assisted" : "deterministic";
   return {
     ...DEFAULT_CONFIG,
     ...candidate,
+    intentUnderstandingMode,
     toolConfig: sanitizeRuntimeToolConfig(candidate.toolConfig ?? {})
   };
 }
 
 const PRESETS: Record<DemoPresetKey, Partial<DashboardRuntimeConfig>> = {
-  stable_mock_demo: { toolConfig: { globalMode: "mock" }, understandingMode: "mock", ttsProviderMode: "mock_browser", fillerEnabled: true, voiceModeEnabled: true, silenceTimeoutMs: 1100, debugVerbosity: "detailed" },
-  live_outage_api_demo: { toolConfig: { globalMode: "api", perToolMode: { check_outage_status: "api" } }, understandingMode: "live", ttsProviderMode: "openai", fillerEnabled: false, silenceTimeoutMs: 900 },
-  mixed_mode_demo: { toolConfig: { globalMode: "mock", perToolMode: { check_outage_status: "api", diagnose_connectivity: "mock" } }, understandingMode: "mixed", ttsProviderMode: "openai" },
-  fast_latency_demo: { toolConfig: { globalMode: "mock" }, understandingMode: "mock", ttsProviderMode: "mock_browser", fillerEnabled: false, silenceTimeoutMs: 450, streamingTranscript: true },
-  clarification_handoff_demo: { toolConfig: { globalMode: "mock" }, understandingMode: "mixed", fillerEnabled: true, stepThroughMode: true, debugVerbosity: "detailed", silenceTimeoutMs: 1200 }
+  stable_mock_demo: { toolConfig: { globalMode: "mock" }, understandingMode: "mock", intentUnderstandingMode: "deterministic", ttsProviderMode: "mock_browser", fillerEnabled: true, voiceModeEnabled: true, silenceTimeoutMs: 1100, debugVerbosity: "detailed" },
+  live_outage_api_demo: { toolConfig: { globalMode: "api", perToolMode: { check_outage_status: "api" } }, understandingMode: "live", intentUnderstandingMode: "llm_assisted", ttsProviderMode: "openai", fillerEnabled: false, silenceTimeoutMs: 900 },
+  mixed_mode_demo: { toolConfig: { globalMode: "mock", perToolMode: { check_outage_status: "api", diagnose_connectivity: "mock" } }, understandingMode: "mixed", intentUnderstandingMode: "llm_assisted", ttsProviderMode: "openai" },
+  fast_latency_demo: { toolConfig: { globalMode: "mock" }, understandingMode: "mock", intentUnderstandingMode: "deterministic", ttsProviderMode: "mock_browser", fillerEnabled: false, silenceTimeoutMs: 450, streamingTranscript: true },
+  clarification_handoff_demo: { toolConfig: { globalMode: "mock" }, understandingMode: "mixed", intentUnderstandingMode: "llm_assisted", fillerEnabled: true, stepThroughMode: true, debugVerbosity: "detailed", silenceTimeoutMs: 1200 }
 };
 
 export function DashboardRuntimeProvider({ children }: { children: ReactNode }) {
