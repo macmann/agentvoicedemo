@@ -13,12 +13,61 @@ export interface TroubleshootingState {
   resolutionStatus: TroubleshootingResolutionStatus;
   kbSource?: string;
   escalationSummary?: string;
+  resolutionReason?: string;
 }
 
-export function detectTroubleshootingResolved(utterance: string): boolean {
+export interface TroubleshootingResolutionDetection {
+  resolved: boolean;
+  resolutionPhraseMatched?: string;
+  resolutionReason?: string;
+}
+
+const NEGATIVE_RESOLUTION_PATTERNS: RegExp[] = [
+  /not\s+fixed/,
+  /still\s+not\s+fixed/,
+  /isn['’]?t\s+fixed/,
+  /not\s+working/,
+  /still\s+down/,
+  /still\s+broken/,
+  /didn['’]?t\s+fix/,
+  /that\s+didn['’]?t\s+work/
+];
+
+const POSITIVE_RESOLUTION_PATTERNS: Array<{ pattern: RegExp; phrase: string }> = [
+  { pattern: /it['’]?s\s+working\s+now/, phrase: "it's working now" },
+  { pattern: /working\s+fine\s+now/, phrase: "working fine now" },
+  { pattern: /that\s+fixed\s+it/, phrase: "that fixed it" },
+  { pattern: /it['’]?s\s+fixed/, phrase: "it's fixed" },
+  { pattern: /i['’]?m\s+back\s+online/, phrase: "i'm back online" },
+  { pattern: /all\s+good\s+now/, phrase: "all good now" },
+  { pattern: /it['’]?s\s+fine\s+now/, phrase: "it's fine now" },
+  { pattern: /yes[,\s]+it\s+works\s+now/, phrase: "yes, it works now" },
+  { pattern: /thank\s*you[,\s]+it\s+works\s+now/, phrase: "thank you, it works now" },
+  { pattern: /internet\s+is\s+back/, phrase: "the internet is back" },
+  { pattern: /resolved/, phrase: "resolved" },
+  { pattern: /works\s+now/, phrase: "works now" },
+  { pattern: /working\s+again/, phrase: "working again" },
+  { pattern: /back\s+up/, phrase: "back up" }
+];
+
+export function detectTroubleshootingResolved(utterance: string): TroubleshootingResolutionDetection {
   const lowered = utterance.toLowerCase();
-  if (/not\s+fixed|still\s+not\s+fixed|isn't\s+fixed|not\s+working|still\s+down/.test(lowered)) return false;
-  return ["fixed", "works now", "working now", "resolved", "all good", "it works", "solved"].some((token) => lowered.includes(token));
+  const negative = NEGATIVE_RESOLUTION_PATTERNS.find((pattern) => pattern.test(lowered));
+  if (negative) {
+    return {
+      resolved: false,
+      resolutionReason: `negative_resolution_signal:${negative.source}`
+    };
+  }
+
+  const positive = POSITIVE_RESOLUTION_PATTERNS.find(({ pattern }) => pattern.test(lowered));
+  if (!positive) return { resolved: false, resolutionReason: "no_resolution_phrase_match" };
+
+  return {
+    resolved: true,
+    resolutionPhraseMatched: positive.phrase,
+    resolutionReason: "explicit_resolution_confirmation"
+  };
 }
 
 export function detectHomeInternetIssue(utterance: string): boolean {
@@ -57,10 +106,11 @@ export function buildTroubleshootingResponse(input: {
   previous?: TroubleshootingState;
   preTool?: PreToolUnderstandingResult;
   maxStepsBeforeEscalation?: number;
-}): { state: TroubleshootingState; responseText: string; selectedStep?: string } {
+}): { state: TroubleshootingState; responseText: string; selectedStep?: string; resolutionDetection: TroubleshootingResolutionDetection } {
   const maxSteps = input.maxStepsBeforeEscalation ?? 4;
+  const resolutionDetection = detectTroubleshootingResolved(input.utterance);
 
-  if (detectTroubleshootingResolved(input.utterance)) {
+  if (resolutionDetection.resolved) {
     return {
       state: {
         ...(input.previous ?? {
@@ -70,11 +120,13 @@ export function buildTroubleshootingResponse(input: {
           currentStepIndex: 0,
           stepsShown: []
         }),
-        active: true,
+        active: false,
         kbSource: input.kb.source,
-        resolutionStatus: "resolved"
+        resolutionStatus: "resolved",
+        resolutionReason: resolutionDetection.resolutionReason
       },
-      responseText: "Glad that fixed it. I’ll mark this as resolved."
+      responseText: "Glad that fixed it. I’ll mark this as resolved.",
+      resolutionDetection
     };
   }
 
@@ -106,7 +158,8 @@ export function buildTroubleshootingResponse(input: {
         kbSource: input.kb.source,
         escalationSummary
       },
-      responseText: "Thanks for trying those steps. I’m escalating this to human support and sharing what we already checked."
+      responseText: "Thanks for trying those steps. I’m escalating this to human support and sharing what we already checked.",
+      resolutionDetection
     };
   }
 
@@ -126,6 +179,7 @@ export function buildTroubleshootingResponse(input: {
       kbSource: input.kb.source
     },
     responseText: `${intro} ${step} Did that resolve it?`,
-    selectedStep: step
+    selectedStep: step,
+    resolutionDetection
   };
 }

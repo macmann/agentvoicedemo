@@ -68,6 +68,12 @@ export interface TesterDebugState {
   troubleshootingResolutionStatus?: "in_progress" | "resolved" | "escalate";
   troubleshootingKbSource?: string;
   troubleshootingMode?: "off" | "on";
+  troubleshootingResolutionDetected?: boolean;
+  resolutionPhraseMatched?: string;
+  resolutionReason?: string;
+  resolutionStatus?: "in_progress" | "resolved" | "escalate";
+  troubleshootingStopped?: boolean;
+  handoffCancelledDueToResolution?: boolean;
   preservedSupportContext?: {
     regionChecked?: string;
     previousStatusResult: string;
