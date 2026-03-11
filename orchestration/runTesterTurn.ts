@@ -7,7 +7,7 @@ import { buildClarificationPrompt, isSlotNoiseTurnAct, responseForStrategy } fro
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
 import { loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
-import { buildTroubleshootingResponse, shouldEnterTroubleshooting } from "@/orchestration/troubleshootingWorkflow";
+import { buildTroubleshootingResponse, shouldEnterTroubleshooting, TroubleshootingResolutionDetection } from "@/orchestration/troubleshootingWorkflow";
 import { runToolExecution } from "@/tools/toolRunner";
 import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { ToolExecutionMode } from "@/tools/toolTypes";
@@ -602,6 +602,8 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     routing = { ...routing, clarificationPrompt: llmClarificationPrompt };
   }
   let resolutionMode: "answer_to_pending_question" | "fresh_intent_turn" | "support_task_continuation" | "support_task_correction" = continuation.requestType ?? "fresh_intent_turn";
+  let troubleshootingResolutionDetection: TroubleshootingResolutionDetection | undefined;
+  let handoffCancelledDueToResolution = false;
 
   if (conversation.pendingWorkflow && (continuePending || conversation.pendingWorkflow.missingSlots.length > 0)) {
     if (answeredPendingQuestion && pendingQuestionContext) {
@@ -631,25 +633,43 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
         preTool,
         maxStepsBeforeEscalation: 4
       });
+      troubleshootingResolutionDetection = troubleshootingResult.resolutionDetection;
+
+      if (troubleshootingResult.state.resolutionStatus === "resolved" && state.handoff?.triggered) {
+        handoffCancelledDueToResolution = true;
+      }
 
       state = {
         ...state,
         conversation: state.conversation
           ? {
               ...state.conversation,
-              activeSupportIntent: "troubleshooting",
+              activeSupportIntent: troubleshootingResult.state.resolutionStatus === "resolved" ? undefined : "troubleshooting",
               troubleshooting: troubleshootingResult.state,
               pendingWorkflow: undefined,
               pendingQuestion: undefined,
-              currentStatus: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "processing"
+              currentStatus:
+                troubleshootingResult.state.resolutionStatus === "escalate"
+                  ? "handoff"
+                  : troubleshootingResult.state.resolutionStatus === "resolved"
+                    ? "processing"
+                    : "processing"
             }
           : state.conversation,
         routing: {
           ...(state.routing ?? { decision: "no_workflow", dialogueState: "responding" as const }),
           decision: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "no_workflow",
           workflowName: undefined,
-          selectedRule: troubleshootingResult.state.resolutionStatus === "escalate" ? "troubleshooting_escalation" : "troubleshooting_flow",
-          whyChosen: "Service is operational and user reports a home-specific issue; running KB-grounded troubleshooting.",
+          selectedRule:
+            troubleshootingResult.state.resolutionStatus === "escalate"
+              ? "troubleshooting_escalation"
+              : troubleshootingResult.state.resolutionStatus === "resolved"
+                ? "troubleshooting_resolved"
+                : "troubleshooting_flow",
+          whyChosen:
+            troubleshootingResult.state.resolutionStatus === "resolved"
+              ? "User confirmed issue is fixed; troubleshooting flow closed immediately."
+              : "Service is operational and user reports a home-specific issue; running KB-grounded troubleshooting.",
           handoffReason: troubleshootingResult.state.resolutionStatus === "escalate" ? "troubleshooting_steps_exhausted" : undefined,
           dialogueState: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "responding"
         },
@@ -660,7 +680,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
               summary: troubleshootingResult.state.escalationSummary
             }
           : troubleshootingResult.state.resolutionStatus === "resolved"
-            ? { triggered: false }
+            ? { triggered: false, reason: "resolved_no_handoff" }
             : state.handoff
       };
 
@@ -793,7 +813,13 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     }
   }
 
-  state = { ...state, handoff: runDeterministicHandoffPolicy(state) };
+  const troubleshootingResolved = state.conversation?.troubleshooting?.resolutionStatus === "resolved";
+  if (!troubleshootingResolved) {
+    state = { ...state, handoff: runDeterministicHandoffPolicy(state) };
+  } else if (state.handoff?.triggered) {
+    handoffCancelledDueToResolution = true;
+    state = { ...state, handoff: { triggered: false, reason: "resolved_no_handoff" } };
+  }
 
   const preservedSupportContext = isolatedIssueAfterOperationalStatus
     ? {
@@ -806,7 +832,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       }
     : undefined;
 
-  if (isolatedIssueAfterOperationalStatus && state.handoff?.triggered) {
+  if (!troubleshootingResolved && isolatedIssueAfterOperationalStatus && state.handoff?.triggered) {
     const contextSummary = `Region checked=${preservedSupportContext?.regionChecked ?? "unknown"}; Status=${preservedSupportContext?.previousStatusResult}; User still reports isolated home issue; Requested next-step support=${postStatusSignals.escalationRecommended}.`;
     state = {
       ...state,
@@ -1002,6 +1028,12 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       troubleshootingResolutionStatus: state.conversation?.troubleshooting?.resolutionStatus,
       troubleshootingKbSource: state.conversation?.troubleshooting?.kbSource,
       troubleshootingMode: input.troubleshootingKbMode ?? "on",
+      troubleshootingResolutionDetected: troubleshootingResolutionDetection?.resolved ?? false,
+      resolutionPhraseMatched: troubleshootingResolutionDetection?.resolutionPhraseMatched,
+      resolutionReason: troubleshootingResolutionDetection?.resolutionReason,
+      resolutionStatus: state.conversation?.troubleshooting?.resolutionStatus,
+      troubleshootingStopped: (state.conversation?.troubleshooting?.resolutionStatus === "resolved") || !(state.conversation?.troubleshooting?.active ?? false),
+      handoffCancelledDueToResolution,
       continuationDetected: combinedContinuationDetected,
       correctedSlots: continuation.correctedSlots,
       previousToolContext: input.previousSession?.toolExecution
