@@ -299,14 +299,17 @@ export function VoiceTesterPage() {
             <div><strong>groundedToolResultUsed:</strong> {yesNo(latestTurn?.metadata.groundedToolResultUsed)}</div>
             <div><strong>preToolProvider:</strong> {latestTurn?.metadata.preToolProvider ?? "-"}</div>
             <div><strong>preToolModel:</strong> {latestTurn?.metadata.preToolModel ?? "-"}</div>
+            <div><strong>preToolProviderSelectionReason:</strong> {latestTurn?.metadata.preToolProviderSelectionReason ?? "-"}</div>
             <div><strong>preToolLatencyMs:</strong> {formatMs(latestTurn?.metadata.preToolLatencyMs)}</div>
             <div><strong>inferredSupportIntent:</strong> {latestTurn?.metadata.preToolInferredSupportIntent ?? "-"}</div>
+            <div><strong>intentConfidence:</strong> {latestTurn?.metadata.preToolIntentConfidence ?? "-"}</div>
             <div><strong>turnAct:</strong> {latestTurn?.metadata.preToolTurnAct ?? latestTurn?.metadata.turnAct ?? "-"}</div>
             <div><strong>clarificationNeeded:</strong> {String(latestTurn?.metadata.preToolClarificationNeeded ?? false)}</div>
             <div><strong>clarificationQuestion:</strong> {latestTurn?.metadata.preToolClarificationQuestion ?? "-"}</div>
             <div><strong>continuationDetected:</strong> {String(latestTurn?.metadata.preToolContinuationDetected ?? latestTurn?.metadata.continuationDetected ?? false)}</div>
             <div><strong>correctionDetected:</strong> {String(latestTurn?.metadata.preToolCorrectionDetected ?? false)}</div>
             <div><strong>Pre-tool decision:</strong> {renderPreToolReason(latestTurn)}</div>
+            <div><strong>rescueMappingApplied:</strong> {String(latestTurn?.metadata.preToolRescueMappingApplied ?? false)}</div>
             <div><strong>Continuation detected:</strong> {String(latestTurn?.metadata.continuationDetected ?? false)}</div>
             <div><strong>Corrected slots:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.correctedSlots ?? {}, null, 2)}</pre></div>
             <div><strong>Support intent transition:</strong> {latestTurn?.metadata.supportIntentTransition ?? "-"}</div>

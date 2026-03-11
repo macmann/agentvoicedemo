@@ -78,6 +78,9 @@ export interface TesterDebugState {
   preToolUnderstandingUsed?: boolean;
   preToolUsageStatus?: "used" | "disabled_by_mode" | "unavailable_or_failed" | "fallback_to_deterministic";
   preToolUsageReason?: string;
+  preToolProviderSelectionReason?: string;
+  preToolIntentConfidence?: number;
+  preToolRescueMappingApplied?: boolean;
   preToolLatencyMs?: number;
   preToolInferredSupportIntent?: "service_status" | "announcements" | "none";
   preToolTurnAct?: string;

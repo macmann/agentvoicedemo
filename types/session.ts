@@ -139,6 +139,8 @@ export interface PreToolUnderstandingDiagnostics {
   rawOutput: string;
   validationStatus: "valid" | "sanitized" | "fallback";
   fallbackBehavior: string;
+  providerSelectionReason?: string;
+  rescueMappingApplied?: boolean;
 }
 
 export interface ResponseGenerationContext {
