@@ -16,6 +16,15 @@ export function evaluateDeterministicDecision(state: Pick<SessionState, "underst
   const thresholds = state.policy?.thresholds;
   const lowConfidence = (state.understanding?.intentConfidence ?? 0) < (thresholds?.minIntentConfidence ?? 0.72);
 
+  const conversationalNoWorkflowActs = ["greeting", "small_talk", "thanks", "farewell", "meta_question", "objection", "correction", "emotion"];
+  if (state.understanding?.turnAct && conversationalNoWorkflowActs.includes(state.understanding.turnAct)) {
+    return {
+      decision: "no_workflow",
+      selectedRule: "conversational_turn_no_workflow",
+      reason: "Turn is conversational/repair-oriented and should not trigger tool execution."
+    };
+  }
+
   if (state.understanding?.handoffRecommended) {
     return {
       decision: "handoff",
@@ -58,7 +67,7 @@ export function evaluateDeterministicDecision(state: Pick<SessionState, "underst
       selectedRule: "low_confidence_clarify_first",
       reason: "Intent confidence below deterministic threshold.",
       clarificationReason: "low_intent_confidence",
-      clarificationPrompt: "Before I run diagnostics, are all devices offline or only one device?"
+      clarificationPrompt: "Is this affecting all devices, or just one?"
     };
   }
 

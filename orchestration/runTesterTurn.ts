@@ -2,6 +2,7 @@ import { getTranscript } from "@/audio/sttAdapter";
 import { getSpeechSynthesis, playSynthesizedAudio } from "@/audio/ttsAdapter";
 import { getGeneratedResponse } from "@/llm-adapters/responseAdapter";
 import { deriveConversationState, resolvePendingQuestionAnswer, SlotResolutionResult } from "@/orchestration/conversationState";
+import { buildClarificationPrompt, isSlotNoiseTurnAct, responseForStrategy } from "@/orchestration/conversationPolicy";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
 import { runToolExecution } from "@/tools/toolRunner";
@@ -44,14 +45,11 @@ function providerMode(state: SessionState): "mock" | "live" | "mixed" {
 
 function hasStrongIntentShift(text: string): boolean {
   const lowered = text.toLowerCase();
-  return lowered.includes("human") || lowered.includes("cancel") || lowered.includes("never mind") || lowered.includes("stop");
+  return lowered.includes("human") || lowered.includes("cancel") || lowered.includes("never mind") || lowered.includes("stop") || lowered.includes("check outage") || lowered.includes("want to check");
 }
 
 function buildClarificationRetryPrompt(pendingQuestion: PendingQuestionState): string {
-  if (pendingQuestion.expectedSlot === "serviceNameOrDevice") return "Just to confirm, is the issue on all devices or only one device?";
-  if (pendingQuestion.expectedSlot === "serviceNameOrRegion") return "Could you confirm the exact service or region, like Core Internet or your postcode?";
-  if (pendingQuestion.expectedSlot === "date") return "Could you share a clear date or time window, for example tomorrow afternoon?";
-  return pendingQuestion.prompt;
+  return buildClarificationPrompt(pendingQuestion.expectedSlot, pendingQuestion.retryCount + 1);
 }
 
 function buildSlotFillAcknowledgement(slot: string, normalizedValue: string): string {
@@ -72,7 +70,7 @@ function chooseFillerPhrase(utterance: string): string {
 function inferPendingQuestionFromRouting(routing: NonNullable<SessionState["routing"]>): PendingQuestionState | undefined {
   if (routing.decision !== "clarify" || !routing.clarificationPrompt) return undefined;
   const prompt = routing.clarificationPrompt.toLowerCase();
-  if (!prompt.includes("all devices offline") && !prompt.includes("only one device")) return undefined;
+  if (!prompt.includes("all devices") && !prompt.includes("just one") && !prompt.includes("only on one")) return undefined;
 
   return {
     questionType: routing.clarificationReason ?? "device_scope_clarification",
@@ -160,14 +158,16 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   }
 
   const pendingQuestionContext = input.previousSession?.conversation?.pendingQuestion;
-  const awaitingPendingAnswer = Boolean(pendingQuestionContext && input.previousSession?.conversation?.currentStatus === "awaiting_user_input" && !hasStrongIntentShift(transcriptText));
-  const slotResolutionResult: SlotResolutionResult | undefined = awaitingPendingAnswer ? resolvePendingQuestionAnswer(transcriptText, pendingQuestionContext) : undefined;
-  const answeredPendingQuestion = Boolean(slotResolutionResult?.matched && slotResolutionResult.confidence !== "low");
 
   input.onStage?.("processing");
   const understandingStart = Date.now();
-  const evaluated = runDeterministicUnderstandingPolicy(transcriptText, { workflowMode: input.workflowMode }, input.previousSession?.policy?.counters);
+  const evaluated = runDeterministicUnderstandingPolicy(transcriptText, { workflowMode: input.workflowMode, pendingQuestion: pendingQuestionContext, pendingWorkflowName: input.previousSession?.conversation?.pendingWorkflow?.workflowName }, input.previousSession?.policy?.counters);
   const understandingMs = Date.now() - understandingStart;
+
+  const turnAct = evaluated.understanding.turnAct;
+  const awaitingPendingAnswer = Boolean(pendingQuestionContext && input.previousSession?.conversation?.currentStatus === "awaiting_user_input" && !hasStrongIntentShift(transcriptText) && !isSlotNoiseTurnAct(turnAct));
+  const slotResolutionResult: SlotResolutionResult | undefined = awaitingPendingAnswer ? resolvePendingQuestionAnswer(transcriptText, pendingQuestionContext) : undefined;
+  const answeredPendingQuestion = Boolean(slotResolutionResult?.matched && slotResolutionResult.confidence !== "low");
 
   state = { ...state, understanding: evaluated.understanding, understandingDiagnostics: evaluated.understandingDiagnostics, policy: evaluated.policy };
 
@@ -176,15 +176,22 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const routingPolicyMs = Date.now() - routingStart;
 
   const priorPending = input.previousSession?.conversation?.pendingWorkflow;
-  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText));
+  const continuePending = Boolean(priorPending && !hasStrongIntentShift(transcriptText) && !evaluated.understanding.replacePendingWorkflow);
   const inferredPendingFromRouting = inferPendingQuestionFromRouting(baseRouting);
 
   let pendingQuestion: PendingQuestionState | undefined = pendingQuestionContext;
-  if (answeredPendingQuestion && pendingQuestionContext) pendingQuestion = undefined;
+  if (evaluated.understanding.resetPendingQuestion) pendingQuestion = undefined;
+  else if (answeredPendingQuestion && pendingQuestionContext) pendingQuestion = undefined;
   else if (awaitingPendingAnswer && pendingQuestionContext && !answeredPendingQuestion) pendingQuestion = { ...pendingQuestionContext, retryCount: pendingQuestionContext.retryCount + 1, prompt: buildClarificationRetryPrompt(pendingQuestionContext) };
   else if (!pendingQuestion && inferredPendingFromRouting) pendingQuestion = inferredPendingFromRouting;
 
-  const nextWorkflowName = continuePending ? priorPending?.workflowName : baseRouting.decision === "workflow" ? baseRouting.workflowName : inferredPendingFromRouting?.workflowName ?? null;
+  const nextWorkflowName = evaluated.understanding.replacePendingWorkflow
+    ? baseRouting.workflowName ?? null
+    : continuePending
+      ? priorPending?.workflowName
+      : baseRouting.decision === "workflow"
+        ? baseRouting.workflowName
+        : inferredPendingFromRouting?.workflowName ?? null;
   const conversation = deriveConversationState({
     previous: input.previousSession?.conversation,
     utterance: transcriptText,
@@ -210,7 +217,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     } else if (conversation.pendingWorkflow.attempts >= 3 && conversation.pendingWorkflow.missingSlots.length > 0) {
       routing = { decision: "handoff", workflowName: conversation.pendingWorkflow.workflowName, selectedRule: "pending_slot_attempts_exceeded", whyChosen: "Unable to collect required slot values after repeated turns.", handoffReason: "slot_filling_attempts_exceeded", dialogueState: "handoff" };
     } else if (conversation.pendingWorkflow.missingSlots.length > 0) {
-      const activePrompt = pendingQuestion?.prompt ?? conversation.pendingWorkflow.clarificationPrompt;
+      const activePrompt = pendingQuestion?.prompt ?? buildClarificationPrompt(conversation.pendingWorkflow.missingSlots[0], pendingQuestion?.retryCount ?? 0);
       routing = { decision: "clarify", workflowName: conversation.pendingWorkflow.workflowName, selectedRule: awaitingPendingAnswer ? "pending_question_retry" : "slot_fill_required_before_workflow", whyChosen: `Pending workflow requires missing slots: ${conversation.pendingWorkflow.missingSlots.join(", ")}`, clarificationPrompt: activePrompt, clarificationReason: awaitingPendingAnswer ? "pending_answer_not_resolved" : "missing_required_slot", dialogueState: "awaiting_missing_info" };
     } else {
       routing = { decision: "workflow", workflowName: conversation.pendingWorkflow.workflowName, selectedRule: "pending_workflow_continuation", whyChosen: "Previously pending workflow now has required slots and can continue.", dialogueState: "ready_to_execute" };
@@ -277,15 +284,25 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   const responseGenerationMs = Date.now() - responseStart;
 
   const groundedToolResponse = buildGroundedToolResponse(state);
+  const strategyText = state.understanding
+    ? responseForStrategy({
+        strategy: state.understanding.responseStrategy,
+        utterance: transcriptText,
+        clarificationPrompt: state.routing?.clarificationPrompt,
+        pendingQuestion: state.conversation?.pendingQuestion,
+        empathyNeeded: state.understanding.empathyNeeded
+      })
+    : undefined;
+
   const responseText = state.handoff?.triggered
     ? `I’m transferring you to a human specialist now. Reason: ${(state.handoff?.reason ?? "policy_trigger").replaceAll("_", " ")}.`
-    : answeredPendingQuestion && pendingQuestionContext?.expectedSlot && slotResolutionResult?.normalizedValue
-      ? `${buildSlotFillAcknowledgement(pendingQuestionContext.expectedSlot, slotResolutionResult.normalizedValue)} ${groundedToolResponse ?? responseGeneration.finalResponseText}`
-      : state.routing?.decision === "clarify" && state.routing.clarificationPrompt
-        ? state.understanding?.empathyNeeded
-          ? `I understand this is frustrating. ${state.routing.clarificationPrompt}`
-          : state.routing.clarificationPrompt
-        : groundedToolResponse ?? responseGeneration.finalResponseText;
+    : strategyText && ["greet_and_invite", "small_talk_and_invite", "acknowledge_thanks", "farewell_close", "repair_and_reset", "explain_and_continue", "bounded_redirect"].includes(state.understanding?.responseStrategy ?? "")
+      ? strategyText
+      : answeredPendingQuestion && pendingQuestionContext?.expectedSlot && slotResolutionResult?.normalizedValue
+        ? `${buildSlotFillAcknowledgement(pendingQuestionContext.expectedSlot, slotResolutionResult.normalizedValue)} ${groundedToolResponse ?? responseGeneration.finalResponseText}`
+        : state.routing?.decision === "clarify" && state.routing.clarificationPrompt
+          ? strategyText ?? state.routing.clarificationPrompt
+          : groundedToolResponse ?? strategyText ?? responseGeneration.finalResponseText;
 
   const assistantTurn = {
     id: `turn-${crypto.randomUUID()}`,
@@ -401,6 +418,12 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       slotResolutionResult,
       normalizedSlotValue: slotResolutionResult?.normalizedValue,
       dialogueState: state.routing?.dialogueState,
+      turnAct: state.understanding?.turnAct,
+      responseStrategy: state.understanding?.responseStrategy,
+      refersToPendingQuestion: state.understanding?.refersToPendingQuestion,
+      resetPendingQuestion: state.understanding?.resetPendingQuestion,
+      replacePendingWorkflow: state.understanding?.replacePendingWorkflow,
+      pendingWorkflowTransition: state.understanding?.replacePendingWorkflow ? "replaced" : state.understanding?.resetPendingQuestion ? "reset" : continuePending ? "continued" : "continued",
       ttsProviderMode: state.tts?.provider,
       fillerUsed: Boolean(fillerResponseText),
       fillerText: fillerResponseText,

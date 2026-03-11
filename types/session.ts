@@ -56,6 +56,35 @@ export interface StructuredUnderstandingResult {
   workflowRequired: boolean;
   recommendedWorkflow?: string;
   handoffRecommended: boolean;
+  turnAct:
+    | "greeting"
+    | "small_talk"
+    | "thanks"
+    | "farewell"
+    | "task_request"
+    | "slot_answer"
+    | "correction"
+    | "objection"
+    | "emotion"
+    | "meta_question"
+    | "handoff_request"
+    | "unclear";
+  responseStrategy:
+    | "greet_and_invite"
+    | "small_talk_and_invite"
+    | "acknowledge_thanks"
+    | "farewell_close"
+    | "continue_workflow"
+    | "ask_clarification"
+    | "repair_and_reset"
+    | "empathy_then_continue"
+    | "explain_and_continue"
+    | "replace_workflow"
+    | "handoff"
+    | "bounded_redirect";
+  refersToPendingQuestion: boolean;
+  resetPendingQuestion: boolean;
+  replacePendingWorkflow: boolean;
   reason?: string;
 }
 
