@@ -181,6 +181,11 @@ export function VoiceTesterPage() {
             <div><strong>Dialogue state:</strong> {latestTurn?.metadata.dialogueState ?? "-"}</div>
             <div><strong>Pending workflow:</strong> {latestTurn?.metadata.pendingWorkflow ?? "-"}</div>
             <div><strong>Pending status:</strong> {latestTurn?.metadata.pendingWorkflowStatus ?? "-"}</div>
+            <div><strong>Pending question:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.pendingQuestion ?? {}, null, 2)}</pre></div>
+            <div><strong>Expected slot:</strong> {latestTurn?.metadata.expectedSlot ?? "-"}</div>
+            <div><strong>Turn handling:</strong> {latestTurn?.metadata.turnHandlingMode ?? "fresh_intent_turn"}</div>
+            <div><strong>Slot resolution result:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.slotResolutionResult ?? {}, null, 2)}</pre></div>
+            <div><strong>Normalized slot value:</strong> {latestTurn?.metadata.normalizedSlotValue ?? "-"}</div>
             <div><strong>Missing slots:</strong> {JSON.stringify(latestTurn?.metadata.missingSlots ?? [], null, 2)}</div>
             <div><strong>Collected slots:</strong> {JSON.stringify(latestTurn?.metadata.collectedSlots ?? {}, null, 2)}</div>
             <div><strong>Latency:</strong> {JSON.stringify(latestTurn?.metadata.latency ?? {}, null, 2)}</div>
