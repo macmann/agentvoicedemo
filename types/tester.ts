@@ -32,10 +32,10 @@ export interface TesterDebugState {
   intentModeLabel?: "Deterministic" | "LLM-assisted";
   postToolResponseModeUsed?: "deterministic" | "llm_generated";
   postToolResponseModeLabel?: "Deterministic" | "LLM-generated";
-  supportIntent?: "service_status" | "announcements" | "none";
+  supportIntent?: "service_status" | "announcements" | "troubleshooting" | "none";
   supportRequestType?: "support_task" | "answer_to_pending_question" | "support_task_continuation" | "support_task_correction" | "conversational_or_meta";
   outOfScopeDemoRequest?: boolean;
-  activeSupportIntent?: "service_status" | "announcements";
+  activeSupportIntent?: "service_status" | "announcements" | "troubleshooting";
   continuationDetected?: boolean;
   correctedSlots?: Record<string, string>;
   previousToolContext?: { toolName: string; requestPayload?: unknown; normalizedResult?: unknown };
@@ -59,6 +59,15 @@ export interface TesterDebugState {
   previousStatusResult?: string;
   isolatedIssueDetected?: boolean;
   escalationRecommended?: boolean;
+
+  troubleshootingActive?: boolean;
+  troubleshootingIssueType?: string;
+  troubleshootingSelectedKBSections?: string[];
+  troubleshootingCurrentStep?: string;
+  troubleshootingStepsShown?: string[];
+  troubleshootingResolutionStatus?: "in_progress" | "resolved" | "escalate";
+  troubleshootingKbSource?: string;
+  troubleshootingMode?: "off" | "on";
   preservedSupportContext?: {
     regionChecked?: string;
     previousStatusResult: string;
@@ -82,7 +91,7 @@ export interface TesterDebugState {
   postToolStructuredSchemaUsed?: boolean;
   postToolJsonSchemaValidationRequested?: boolean;
   groundedToolResultUsed?: boolean;
-  groundedSupportIntent?: "service_status" | "announcements" | "none";
+  groundedSupportIntent?: "service_status" | "announcements" | "troubleshooting" | "none";
   groundedToolName?: string;
   groundedMatchedRegion?: string;
   groundedMatchedCategory?: string;

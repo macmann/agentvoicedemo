@@ -6,6 +6,8 @@ import { deriveConversationState, resolvePendingQuestionAnswer, SlotResolutionRe
 import { buildClarificationPrompt, isSlotNoiseTurnAct, responseForStrategy } from "@/orchestration/conversationPolicy";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
+import { loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
+import { buildTroubleshootingResponse, shouldEnterTroubleshooting } from "@/orchestration/troubleshootingWorkflow";
 import { runToolExecution } from "@/tools/toolRunner";
 import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { ToolExecutionMode } from "@/tools/toolTypes";
@@ -198,7 +200,7 @@ function isIntentResetOrSwitch(text: string): boolean {
 function detectSupportContinuation(input: {
   utterance: string;
   turnAct?: string;
-  activeSupportIntent?: "service_status" | "announcements";
+  activeSupportIntent?: "service_status" | "announcements" | "troubleshooting";
   pendingQuestion?: PendingQuestionState;
 }): { continuationDetected: boolean; requestType?: "support_task_continuation" | "support_task_correction"; correctedSlots: Record<string, string> } {
   const { utterance, turnAct, activeSupportIntent, pendingQuestion } = input;
@@ -370,6 +372,8 @@ export interface RunTesterTurnInput {
   fillerEnabled?: boolean;
   intentUnderstandingMode?: "deterministic" | "llm_assisted";
   postToolResponseMode?: "deterministic" | "llm_generated";
+  troubleshootingKbMode?: "off" | "on";
+  troubleshootingKbSource?: string;
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -431,7 +435,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     const preToolResult = await getPreToolUnderstandingResult({
       utterance: transcriptText,
       recentConversation: (input.previousSession?.conversation?.turns ?? []).slice(-6).map((turn) => ({ role: turn.role, text: turn.text })),
-      activeSupportIntent: input.previousSession?.conversation?.activeSupportIntent,
+      activeSupportIntent: input.previousSession?.conversation?.activeSupportIntent === "troubleshooting" ? undefined : input.previousSession?.conversation?.activeSupportIntent,
       pendingQuestion: input.previousSession?.conversation?.pendingQuestion
         ? {
             expectedSlot: input.previousSession.conversation.pendingQuestion.expectedSlot,
@@ -528,6 +532,13 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       }
     : adjustedUnderstanding;
 
+  const troubleshootingEligible = shouldEnterTroubleshooting({
+    previousStatusOperational: previousStatus.operational,
+    activeSupportIntent: previousActiveSupportIntent,
+    utterance: transcriptText,
+    kbMode: input.troubleshootingKbMode ?? "on"
+  });
+
   const awaitingPendingAnswer = Boolean(pendingQuestionContext && input.previousSession?.conversation?.currentStatus === "awaiting_user_input" && !hasStrongIntentShift(transcriptText) && !isSlotNoiseTurnAct(turnAct));
   const slotResolutionResult: SlotResolutionResult | undefined = awaitingPendingAnswer ? resolvePendingQuestionAnswer(transcriptText, pendingQuestionContext) : undefined;
   const answeredPendingQuestion = Boolean(slotResolutionResult?.matched && slotResolutionResult.confidence !== "low");
@@ -609,6 +620,79 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   }
 
   state = { ...state, conversation, routing };
+
+  if (troubleshootingEligible || input.previousSession?.conversation?.troubleshooting?.active) {
+    try {
+      const kb = await loadTroubleshootingKb(input.troubleshootingKbSource);
+      const troubleshootingResult = buildTroubleshootingResponse({
+        utterance: transcriptText,
+        kb,
+        previous: input.previousSession?.conversation?.troubleshooting,
+        preTool,
+        maxStepsBeforeEscalation: 4
+      });
+
+      state = {
+        ...state,
+        conversation: state.conversation
+          ? {
+              ...state.conversation,
+              activeSupportIntent: "troubleshooting",
+              troubleshooting: troubleshootingResult.state,
+              pendingWorkflow: undefined,
+              pendingQuestion: undefined,
+              currentStatus: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "processing"
+            }
+          : state.conversation,
+        routing: {
+          ...(state.routing ?? { decision: "no_workflow", dialogueState: "responding" as const }),
+          decision: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "no_workflow",
+          workflowName: undefined,
+          selectedRule: troubleshootingResult.state.resolutionStatus === "escalate" ? "troubleshooting_escalation" : "troubleshooting_flow",
+          whyChosen: "Service is operational and user reports a home-specific issue; running KB-grounded troubleshooting.",
+          handoffReason: troubleshootingResult.state.resolutionStatus === "escalate" ? "troubleshooting_steps_exhausted" : undefined,
+          dialogueState: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "responding"
+        },
+        handoff: troubleshootingResult.state.resolutionStatus === "escalate"
+          ? {
+              triggered: true,
+              reason: "troubleshooting_steps_exhausted",
+              summary: troubleshootingResult.state.escalationSummary
+            }
+          : troubleshootingResult.state.resolutionStatus === "resolved"
+            ? { triggered: false }
+            : state.handoff
+      };
+
+      if (troubleshootingResult.state.resolutionStatus !== "escalate") {
+        state = {
+          ...state,
+          toolExecution: undefined,
+          toolResult: undefined,
+          responseText: troubleshootingResult.responseText,
+          responseGeneration: {
+            provider: "mock",
+            model: "troubleshooting-kb-grounded-v1",
+            source: "deterministic_template",
+            toneSettings: ["grounded", "stepwise"],
+            maxResponseLength: 220,
+            structuredContext: buildResponseContext({
+              state,
+              postToolResponseMode,
+              groundedToolResultUsed: true,
+              previousSession: input.previousSession,
+              followupCorrectionTurn: continuation.requestType === "support_task_correction"
+            }),
+            finalResponseText: troubleshootingResult.responseText,
+            guardrailNote: "Troubleshooting response grounded in markdown KB.",
+            fallbackBehavior: "Deterministic troubleshooting branch"
+          }
+        };
+      }
+    } catch {
+      // If KB loading fails, continue existing flow.
+    }
+  }
 
   const shouldUseFiller = Boolean(input.voiceModeEnabled && (input.fillerEnabled ?? FILLER_CONFIG.enabled) && routing.decision === "workflow" && (!FILLER_CONFIG.onlyForWorkflow || routing.decision === "workflow"));
   const fillerResponseText = shouldUseFiller ? chooseFillerPhrase(transcriptText) : undefined;
@@ -770,7 +854,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       })
     : undefined;
 
-  const responseText = (
+  const responseText = state.responseText ?? (
     state.handoff?.triggered
       ? isolatedIssueAfterOperationalStatus
         ? `I checked ${previousStatus.region ?? "your area"} and service is operational at a broader level. Since your home issue is still ongoing, I’m connecting you to a human support agent now.`
@@ -910,6 +994,14 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       supportIntent: state.conversation?.activeSupportIntent ?? (state.understanding?.intent === "service_status" ? "service_status" : state.understanding?.intent === "announcements" ? "announcements" : "none"),
       supportRequestType: state.understanding?.requestType ?? "conversational_or_meta",
       activeSupportIntent: state.conversation?.activeSupportIntent,
+      troubleshootingActive: state.conversation?.troubleshooting?.active,
+      troubleshootingIssueType: state.conversation?.troubleshooting?.issueType,
+      troubleshootingSelectedKBSections: state.conversation?.troubleshooting?.selectedKBSections,
+      troubleshootingCurrentStep: state.conversation?.troubleshooting?.stepsShown?.[state.conversation?.troubleshooting?.stepsShown.length - 1],
+      troubleshootingStepsShown: state.conversation?.troubleshooting?.stepsShown,
+      troubleshootingResolutionStatus: state.conversation?.troubleshooting?.resolutionStatus,
+      troubleshootingKbSource: state.conversation?.troubleshooting?.kbSource,
+      troubleshootingMode: input.troubleshootingKbMode ?? "on",
       continuationDetected: combinedContinuationDetected,
       correctedSlots: continuation.correctedSlots,
       previousToolContext: input.previousSession?.toolExecution

@@ -25,6 +25,8 @@ export interface DashboardRuntimeConfig {
   streamingTranscript: boolean;
   silenceTimeoutMs: number;
   debugVerbosity: DebugVerbosity;
+  troubleshootingKbMode: "off" | "on";
+  troubleshootingKbSource: string;
 }
 
 export const DASHBOARD_RUNTIME_STORAGE_KEY = "voiceai.dashboard.runtime.config.v1";
@@ -43,7 +45,9 @@ const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   stepThroughMode: false,
   streamingTranscript: true,
   silenceTimeoutMs: 1000,
-  debugVerbosity: "detailed"
+  debugVerbosity: "detailed",
+  troubleshootingKbMode: "on",
+  troubleshootingKbSource: "/kb/troubleshooting.md"
 };
 
 export type DemoPresetKey = "stable_mock_demo" | "live_outage_api_demo" | "mixed_mode_demo" | "fast_latency_demo" | "clarification_handoff_demo";
@@ -66,11 +70,14 @@ function sanitizeConfig(raw: unknown): DashboardRuntimeConfig {
   const candidate = (raw ?? {}) as Partial<DashboardRuntimeConfig>;
   const intentUnderstandingMode = candidate.intentUnderstandingMode === "llm_assisted" ? "llm_assisted" : "deterministic";
   const postToolResponseMode = candidate.postToolResponseMode === "llm_generated" ? "llm_generated" : "deterministic";
+  const troubleshootingKbMode = candidate.troubleshootingKbMode === "off" ? "off" : "on";
   return {
     ...DEFAULT_CONFIG,
     ...candidate,
     intentUnderstandingMode,
     postToolResponseMode,
+    troubleshootingKbMode,
+    troubleshootingKbSource: typeof candidate.troubleshootingKbSource === "string" && candidate.troubleshootingKbSource.trim() ? candidate.troubleshootingKbSource : DEFAULT_CONFIG.troubleshootingKbSource,
     toolConfig: sanitizeRuntimeToolConfig(candidate.toolConfig ?? {})
   };
 }

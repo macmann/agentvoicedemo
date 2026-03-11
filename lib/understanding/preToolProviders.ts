@@ -10,7 +10,7 @@ const OPENAI_ENDPOINT_PATH = "/responses";
 type Input = {
   utterance: string;
   recentConversation?: Array<{ role: string; text: string }>;
-  activeSupportIntent?: "service_status" | "announcements";
+  activeSupportIntent?: "service_status" | "announcements" | "troubleshooting";
   pendingQuestion?: { expectedSlot?: string; prompt?: string };
   pendingWorkflow?: { workflowName?: string; missingSlots?: string[] };
   previousToolContext?: { toolName?: string; normalizedResult?: unknown };

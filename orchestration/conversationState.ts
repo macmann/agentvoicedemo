@@ -270,9 +270,11 @@ export function deriveConversationState(input: {
     activeSupportIntent:
       input.intent === "service_status" || input.intent === "announcements"
         ? input.intent
-        : input.intent === "talk_to_human" || /reset|start over|new request/i.test(input.utterance)
-          ? undefined
-          : input.previous?.activeSupportIntent,
+        : input.previous?.activeSupportIntent === "troubleshooting"
+          ? "troubleshooting"
+          : input.intent === "talk_to_human" || /reset|start over|new request/i.test(input.utterance)
+            ? undefined
+            : input.previous?.activeSupportIntent,
     pendingWorkflow,
     pendingQuestion: input.pendingQuestion,
     pendingSlots: pendingWorkflow?.missingSlots ?? [],

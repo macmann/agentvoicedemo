@@ -18,6 +18,7 @@ export function buildResponseContext(input: BuildResponseContextInput): Response
 
   const pending = state.conversation?.pendingWorkflow;
   const supportIntent = state.conversation?.activeSupportIntent ?? (state.understanding?.intent === "service_status" ? "service_status" : state.understanding?.intent === "announcements" ? "announcements" : "none");
+  const troubleshootingState = state.conversation?.troubleshooting;
   const normalizedToolResult = (state.toolExecution?.normalizedResult ?? state.toolResult?.result ?? undefined) as Record<string, unknown> | undefined;
   const selectedRegionOrService =
     (state.conversation?.collectedSlots?.serviceNameOrRegion as string | undefined) ??
@@ -76,6 +77,8 @@ export function buildResponseContext(input: BuildResponseContextInput): Response
       ? `Pending workflow ${pending.workflowName} (${pending.status}); missing slots: ${pending.missingSlots.join(", ") || "none"}; collected: ${JSON.stringify(pending.collectedSlots)}`
       : "No pending workflow.",
     policyInstructions:
-      "Use responseMode and responseStrategy. For conversational_only responses be brief, natural, and ask at most one next-step question. For task_oriented responses stay precise and grounded to provided context only."
+      troubleshootingState?.active
+        ? "Troubleshooting mode is active. Stay grounded in the markdown KB-derived steps only, ask one troubleshooting question at a time, and do not invent instructions."
+        : "Use responseMode and responseStrategy. For conversational_only responses be brief, natural, and ask at most one next-step question. For task_oriented responses stay precise and grounded to provided context only."
   };
 }

@@ -154,7 +154,7 @@ export interface PreToolUnderstandingDiagnostics {
 }
 
 export interface ResponseGenerationContext {
-  supportIntent: "service_status" | "announcements" | "none";
+  supportIntent: "service_status" | "announcements" | "troubleshooting" | "none";
   postToolResponseMode: "deterministic" | "llm_generated";
   originalUtterance: string;
   sentiment?: string;
@@ -230,7 +230,7 @@ export interface ConversationState {
   turns: ConversationTurn[];
   currentStatus: "idle" | "listening" | "processing" | "awaiting_user_input" | "speaking" | "handoff";
   activeIntent?: string;
-  activeSupportIntent?: "service_status" | "announcements";
+  activeSupportIntent?: "service_status" | "announcements" | "troubleshooting";
   pendingWorkflow?: PendingWorkflowState;
   pendingQuestion?: PendingQuestionState;
   pendingSlots: string[];
@@ -255,6 +255,17 @@ export interface ConversationState {
     candidateCategories?: string[];
     prompt?: string;
     lastUnresolvedToolContext?: Record<string, unknown>;
+  };
+  troubleshooting?: {
+    active: boolean;
+    issueType?: string;
+    suspectedSymptoms: string[];
+    selectedKBSections: string[];
+    currentStepIndex: number;
+    stepsShown: string[];
+    resolutionStatus: "in_progress" | "resolved" | "escalate";
+    kbSource?: string;
+    escalationSummary?: string;
   };
 }
 

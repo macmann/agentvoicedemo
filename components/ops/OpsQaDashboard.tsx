@@ -230,6 +230,8 @@ export function OpsQaDashboard() {
             {kv("Model", config.understandingModel)}
             {kv("Intent mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.intentUnderstandingMode === "llm_assisted" ? toneClass("mixed") : toneClass("mock")}`}>{config.intentUnderstandingMode === "llm_assisted" ? "LLM-assisted" : "Deterministic"}</span>)}
             {kv("Response mode", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.postToolResponseMode === "llm_generated" ? toneClass("mixed") : toneClass("mock")}`}>{config.postToolResponseMode === "llm_generated" ? "LLM-generated" : "Deterministic"}</span>)}
+            {kv("Troubleshooting KB", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.troubleshootingKbMode === "on" ? toneClass("mixed") : toneClass("default")}`}>{config.troubleshootingKbMode}</span>)}
+            {kv("Troubleshooting KB Source", config.troubleshootingKbSource)}
             {kv("Mock fallback", <span className={`rounded-full border px-2 py-0.5 text-[11px] ${config.mockFallbackEnabled ? toneClass("fallback") : toneClass("default")}`}>{String(config.mockFallbackEnabled)}</span>)}
             <label className="block pt-1 text-xs">Intent understanding mode
               <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.intentUnderstandingMode} onChange={(e) => setConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as "deterministic" | "llm_assisted" }))}>
@@ -240,6 +242,14 @@ export function OpsQaDashboard() {
               <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.postToolResponseMode} onChange={(e) => setConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as "deterministic" | "llm_generated" }))}>
                 <option value="deterministic">deterministic (lower latency, more rigid wording)</option><option value="llm_generated">llm_generated (higher latency, natural grounded wording)</option>
               </select>
+            </label>
+            <label className="block pt-1 text-xs">Troubleshooting KB mode
+              <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.troubleshootingKbMode} onChange={(e) => setConfig((prev) => ({ ...prev, troubleshootingKbMode: e.target.value as "off" | "on" }))}>
+                <option value="on">on</option><option value="off">off</option>
+              </select>
+            </label>
+            <label className="block pt-1 text-xs">Troubleshooting KB source
+              <input className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.troubleshootingKbSource} onChange={(e) => setConfig((prev) => ({ ...prev, troubleshootingKbSource: e.target.value }))} />
             </label>
             <label className="block pt-1 text-xs">Debug verbosity
               <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2" value={config.debugVerbosity} onChange={(e) => setConfig((prev) => ({ ...prev, debugVerbosity: e.target.value as "basic" | "detailed" }))}>
@@ -428,6 +438,13 @@ export function OpsQaDashboard() {
             {kv("Grounded overallStatus", latest?.metadata.groundedOverallStatus ?? "-")}
             {kv("Grounded serviceStatus", latest?.metadata.groundedServiceStatus ?? "-")}
             {kv("Grounded clarificationNeeded", String(latest?.metadata.groundedClarificationNeeded ?? false))}
+            {kv("Troubleshooting Active", String(latest?.metadata.troubleshootingActive ?? false))}
+            {kv("Troubleshooting Mode", latest?.metadata.troubleshootingMode ?? "-")}
+            {kv("Troubleshooting KB Source", latest?.metadata.troubleshootingKbSource ?? "-")}
+            {kv("Selected KB Sections", (latest?.metadata.troubleshootingSelectedKBSections ?? []).join(", ") || "-")}
+            {kv("Current Troubleshooting Step", latest?.metadata.troubleshootingCurrentStep ?? "-")}
+            {kv("Troubleshooting Steps Shown", JSON.stringify(latest?.metadata.troubleshootingStepsShown ?? []))}
+            {kv("Troubleshooting Resolution", latest?.metadata.troubleshootingResolutionStatus ?? "-")}
             {kv("Grounded clarificationPrompt", latest?.metadata.groundedClarificationPrompt ?? "-")}
             {kv("Latency", `${latest?.metadata.responseGenerationLatencyMs ?? latest?.metadata.latency?.responseGenerationMs ?? latest?.metadata.latency?.responseMs ?? "-"} ms`)}
             {kv("Tool used", String(Boolean(latest?.metadata.toolCalled)))}
