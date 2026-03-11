@@ -72,6 +72,12 @@ export interface TesterDebugState {
   pendingWorkflow?: string;
   pendingWorkflowStatus?: string;
   pendingQuestion?: PendingQuestionState;
+  toolClarificationNeeded?: boolean;
+  clarificationReason?: string;
+  expectedSlotFromTool?: string;
+  candidateCategories?: string[];
+  pendingQuestionPrompt?: string;
+  lastUnresolvedToolContext?: Record<string, unknown>;
   expectedSlot?: string;
   slotResolutionResult?: {
     matched: boolean;

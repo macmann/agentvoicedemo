@@ -212,6 +212,12 @@ export function VoiceTesterPage() {
             <div><strong>Required slots:</strong> {(latestTurn?.metadata.requiredSlots ?? []).join(", ") || "-"}</div>
             <div><strong>Missing slots:</strong> {(latestTurn?.metadata.missingSlots ?? []).join(", ") || "-"}</div>
             <div><strong>Pending question:</strong> {latestTurn?.metadata.pendingQuestion?.prompt ?? "-"}</div>
+            <div><strong>Tool clarification needed:</strong> {String(latestTurn?.metadata.toolClarificationNeeded ?? false)}</div>
+            <div><strong>Tool clarification reason:</strong> {latestTurn?.metadata.clarificationReason ?? "-"}</div>
+            <div><strong>Expected slot from tool:</strong> {latestTurn?.metadata.expectedSlotFromTool ?? "-"}</div>
+            <div><strong>Candidate categories:</strong> {(latestTurn?.metadata.candidateCategories ?? []).join(", ") || "-"}</div>
+            <div><strong>Pending question prompt:</strong> {latestTurn?.metadata.pendingQuestionPrompt ?? "-"}</div>
+            <div><strong>Last unresolved tool context:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.lastUnresolvedToolContext ?? {}, null, 2)}</pre></div>
             <div><strong>Tool blocked (missing slot):</strong> {String(latestTurn?.metadata.toolExecutionBlockedDueToMissingSlot ?? false)}</div>
             <div><strong>Region extracted:</strong> {latestTurn?.metadata.regionExtracted ?? "-"}</div>
             <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>

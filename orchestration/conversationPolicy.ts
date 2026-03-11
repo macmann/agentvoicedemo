@@ -113,6 +113,15 @@ export function buildClarificationPrompt(expectedSlot: string, retryCount = 0): 
     return retryCount > 0 ? "What date or time window works best for the technician visit?" : "What date or time window would you like for the technician visit?";
   }
 
+  if (expectedSlot === "serviceCategory") {
+    const variants = [
+      "I already have the region. Which service type should I check: FTTH or Cable?",
+      "I’ve got the location already — do you mean FTTH or Cable?",
+      "Just to finish this lookup: is it FTTH or Cable?"
+    ];
+    return variants[Math.min(retryCount, variants.length - 1)];
+  }
+
   return "Could you share a bit more so I can continue?";
 }
 

@@ -323,6 +323,12 @@ export function OpsQaDashboard() {
             {kv("Workflow", latest?.metadata.workflowSelected ?? "-")}
             {kv("Required Slots", (latest?.metadata.requiredSlots ?? []).join(", ") || "-")}
             {kv("Pending Q", latest?.metadata.pendingQuestion?.prompt ?? "-")}
+            {kv("Tool Clarification Needed", String(latest?.metadata.toolClarificationNeeded ?? false))}
+            {kv("Tool Clarification Reason", latest?.metadata.clarificationReason ?? "-")}
+            {kv("Expected Slot From Tool", latest?.metadata.expectedSlotFromTool ?? "-")}
+            {kv("Candidate Categories", (latest?.metadata.candidateCategories ?? []).join(", ") || "-")}
+            {kv("Pending Question Prompt", latest?.metadata.pendingQuestionPrompt ?? "-")}
+            {kv("Last Unresolved Tool Context", JSON.stringify(latest?.metadata.lastUnresolvedToolContext ?? {}))}
             {kv("Missing Slots", (latest?.metadata.missingSlots ?? []).join(", ") || "-")}
             {kv("Tool Blocked (Missing Slot)", String(latest?.metadata.toolExecutionBlockedDueToMissingSlot ?? false))}
             {kv("Region Extracted", latest?.metadata.regionExtracted ?? "-")}

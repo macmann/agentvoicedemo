@@ -16,6 +16,24 @@ const TIME_WINDOW_PATTERNS: Array<{ token: string; normalized: string }> = [
   { token: "evening", normalized: "evening" },
   { token: "night", normalized: "night" }
 ];
+const SERVICE_CATEGORY_ALIASES: Array<{ tokens: string[]; normalized: string }> = [
+  { tokens: ["ftth", "fiber", "fibre", "internet", "fiber optic", "fibre optic"], normalized: "FTTH" },
+  { tokens: ["cable", "coax", "coaxial"], normalized: "CABLE" }
+];
+
+function normalizeServiceCategorySlot(utterance: string): SlotResolutionResult {
+  const lowered = utterance.toLowerCase().trim();
+  const matched = SERVICE_CATEGORY_ALIASES.find((alias) => alias.tokens.some((token) => lowered.includes(token)));
+  if (matched) {
+    return { matched: true, confidence: "high", normalizedValue: matched.normalized, rawValue: utterance.trim(), reason: "matched" };
+  }
+
+  if (extractServiceRegionValue(utterance)) {
+    return { matched: false, confidence: "low", reason: "ambiguous" };
+  }
+
+  return { matched: false, confidence: "low", reason: "no_match" };
+}
 
 export interface SlotResolutionResult {
   matched: boolean;
@@ -119,6 +137,10 @@ export function resolvePendingQuestionAnswer(utterance: string, pendingQuestion?
     return { matched: false, confidence: "low", reason: "no_match" };
   }
 
+  if (pendingQuestion.expectedSlot === "serviceCategory") {
+    return normalizeServiceCategorySlot(utterance);
+  }
+
   return { matched: false, confidence: "low", reason: "no_match" };
 }
 
@@ -163,8 +185,8 @@ function extractConversationSlots(utterance: string): Record<string, string> {
     slots.serviceNameOrRegion = explicitRegion;
   }
 
-  if (lowered.includes("ftth")) slots.serviceCategory = "FTTH";
-  if (lowered.includes("cable")) slots.serviceCategory = "CABLE";
+  const normalizedCategory = normalizeServiceCategorySlot(utterance);
+  if (normalizedCategory.matched && normalizedCategory.normalizedValue) slots.serviceCategory = normalizedCategory.normalizedValue;
 
   if (lowered.includes("router") || lowered.includes("modem") || lowered.includes("device")) {
     slots.serviceNameOrDevice = utterance.trim();
@@ -258,6 +280,7 @@ export function deriveConversationState(input: {
     lastAssistantQuestion: input.previous?.lastAssistantQuestion,
     lastToolResult: input.toolResult ?? input.previous?.lastToolResult,
     lastHandoffState: input.handoff ?? input.previous?.lastHandoffState,
-    fallbackState: input.previous?.fallbackState
+    fallbackState: input.previous?.fallbackState,
+    toolClarification: input.previous?.toolClarification
   };
 }

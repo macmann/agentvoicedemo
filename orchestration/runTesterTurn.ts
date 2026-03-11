@@ -164,8 +164,54 @@ function buildSlotFillAcknowledgement(slot: string, normalizedValue: string): st
     if (normalizedValue === "single_device") return "Got it — this looks limited to one device. I’ll run a focused connectivity check now.";
   }
   if (slot === "serviceNameOrRegion") return `Got it — I’ll check outage status for ${normalizedValue}.`;
+  if (slot === "serviceCategory") return `Got it — I’ll check ${normalizedValue} for the outage status now.`;
   if (slot === "date") return `Perfect — I’ll proceed with ${normalizedValue} for the appointment window.`;
   return "Thanks, that helps. I’ll continue now.";
+}
+
+function getToolClarification(result: unknown): {
+  toolClarificationNeeded: boolean;
+  clarificationReason?: string;
+  expectedSlotFromTool?: string;
+  candidateCategories?: string[];
+  pendingQuestionPrompt?: string;
+  lastUnresolvedToolContext?: Record<string, unknown>;
+} | undefined {
+  const parsed = (result ?? {}) as {
+    clarificationNeeded?: boolean;
+    clarificationPrompt?: string;
+    parsedRegion?: string;
+    parsedCategory?: string;
+    debug?: {
+      clarificationReason?: string | null;
+      candidateMatchesFound?: {
+        region?: Array<{ category?: string }>;
+      };
+      selectedMatch?: unknown;
+    };
+  };
+
+  if (!parsed.clarificationNeeded) return undefined;
+
+  const candidateCategories = [
+    ...new Set((parsed.debug?.candidateMatchesFound?.region ?? []).map((item) => (item.category ?? "").toUpperCase()).filter(Boolean))
+  ];
+
+  const expectedSlotFromTool = candidateCategories.length > 1 ? "category" : "serviceNameOrRegion";
+
+  return {
+    toolClarificationNeeded: true,
+    clarificationReason: parsed.debug?.clarificationReason ?? "tool_requires_clarification",
+    expectedSlotFromTool,
+    candidateCategories,
+    pendingQuestionPrompt: parsed.clarificationPrompt,
+    lastUnresolvedToolContext: {
+      parsedRegion: parsed.parsedRegion,
+      parsedCategory: parsed.parsedCategory,
+      candidateCategories,
+      selectedMatch: parsed.debug?.selectedMatch ?? null
+    }
+  };
 }
 
 function chooseFillerPhrase(utterance: string): string {
@@ -214,8 +260,8 @@ function buildGroundedToolResponse(state: SessionState): string | undefined {
   }
 
   if (state.toolResult.toolName === "check_outage_status") {
-    const result = (state.toolResult.result ?? {}) as { matchedServiceName?: string; matchedRegion?: string; overallStatus?: string; estimatedRecoveryText?: string; clarificationNeeded?: boolean };
-    if (result.clarificationNeeded) return "I couldn’t confidently identify the service or region. Could you tell me the exact service name?";
+    const result = (state.toolResult.result ?? {}) as { matchedServiceName?: string; matchedRegion?: string; overallStatus?: string; estimatedRecoveryText?: string; clarificationNeeded?: boolean; clarificationPrompt?: string };
+    if (result.clarificationNeeded) return result.clarificationPrompt ?? "I need one more detail before I can check outages.";
     const service = result.matchedServiceName ?? result.matchedRegion ?? "that service";
     const status = (result.overallStatus ?? "UNKNOWN").replaceAll("_", " ").toLowerCase();
     const recovery = result.estimatedRecoveryText ? ` We expect recovery in ${result.estimatedRecoveryText}.` : "";
@@ -356,7 +402,18 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   let pendingQuestion: PendingQuestionState | undefined = pendingQuestionContext;
   if (understanding.resetPendingQuestion) pendingQuestion = undefined;
   else if (answeredPendingQuestion && pendingQuestionContext) pendingQuestion = undefined;
-  else if (awaitingPendingAnswer && pendingQuestionContext && !answeredPendingQuestion) pendingQuestion = { ...pendingQuestionContext, retryCount: pendingQuestionContext.retryCount + 1, prompt: buildClarificationRetryPrompt(pendingQuestionContext) };
+  else if (awaitingPendingAnswer && pendingQuestionContext && !answeredPendingQuestion) {
+    const retryCount = pendingQuestionContext.retryCount + 1;
+    const isCategoryQuestion = pendingQuestionContext.expectedSlot === "serviceCategory";
+    const repeatedRegion = isCategoryQuestion && slotResolutionResult?.reason === "ambiguous";
+    pendingQuestion = {
+      ...pendingQuestionContext,
+      retryCount,
+      prompt: repeatedRegion
+        ? "I already identified the region. I just need to know whether you mean FTTH or Cable."
+        : buildClarificationRetryPrompt({ ...pendingQuestionContext, retryCount })
+    };
+  }
   else if (!pendingQuestion && inferredPendingFromRouting) pendingQuestion = inferredPendingFromRouting;
 
   const nextWorkflowName = understanding.replacePendingWorkflow
@@ -416,7 +473,28 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     input.onStage?.("checking_tool");
     state = { ...state, routing: { ...routing, dialogueState: "executing_tool" } };
     const { toolResult, record } = await runToolExecution(state, { forceFallback: input.forceFallback, modeOverride: input.toolMode, runtimeConfig: input.runtimeToolConfig });
-    const pendingStatus = state.conversation?.pendingWorkflow ? { ...state.conversation.pendingWorkflow, status: "completed" as const, missingSlots: [] } : undefined;
+    const toolClarification = toolResult.toolName === "check_outage_status" && toolResult.status === "success" ? getToolClarification(toolResult.result) : undefined;
+    const isToolClarificationFlow = Boolean(toolClarification?.toolClarificationNeeded);
+    const pendingStatus = state.conversation?.pendingWorkflow
+      ? {
+          ...state.conversation.pendingWorkflow,
+          status: isToolClarificationFlow ? ("awaiting_input" as const) : ("completed" as const),
+          missingSlots: isToolClarificationFlow ? ["serviceCategory"] : []
+        }
+      : undefined;
+
+    const nextPendingQuestion = isToolClarificationFlow && state.conversation?.pendingWorkflow
+      ? {
+          questionType: "service_category",
+          expectedSlot: "serviceCategory",
+          workflowName: "check_outage_status" as const,
+          prompt: toolClarification?.pendingQuestionPrompt ?? buildClarificationPrompt("serviceCategory", state.conversation.pendingQuestion?.retryCount ?? 0),
+          askedAtTurnId: state.conversation.turns[state.conversation.turns.length - 1]?.id,
+          retryCount: state.conversation.pendingQuestion?.expectedSlot === "serviceCategory" ? state.conversation.pendingQuestion.retryCount : 0
+        }
+      : undefined;
+
+    const toolPrompt = toolClarification?.pendingQuestionPrompt ?? buildClarificationPrompt("serviceCategory", 0);
 
     state = {
       ...state,
@@ -427,8 +505,31 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
         normalizedResult: record.normalizedResult as Record<string, unknown> | undefined
       },
       toolResult,
-      routing: state.routing ? { ...state.routing, dialogueState: "responding" } : state.routing,
-      conversation: state.conversation ? { ...state.conversation, pendingWorkflow: pendingStatus, pendingQuestion: undefined, lastToolResult: toolResult.result, currentStatus: "processing" } : state.conversation
+      routing: state.routing
+        ? isToolClarificationFlow
+          ? { ...state.routing, decision: "clarify", selectedRule: "tool_requires_service_category", whyChosen: "Tool matched region but requires category disambiguation.", clarificationPrompt: toolPrompt, clarificationReason: "tool_clarification_required", dialogueState: "awaiting_missing_info" }
+          : { ...state.routing, dialogueState: "responding" }
+        : state.routing,
+      conversation: state.conversation
+        ? {
+            ...state.conversation,
+            pendingWorkflow: pendingStatus,
+            pendingQuestion: nextPendingQuestion,
+            currentStatus: isToolClarificationFlow ? "awaiting_user_input" : "processing",
+            lastToolResult: toolResult.result,
+            toolClarification: isToolClarificationFlow
+              ? {
+                  toolName: toolResult.toolName,
+                  clarificationNeeded: true,
+                  clarificationReason: toolClarification?.clarificationReason,
+                  expectedSlotFromTool: toolClarification?.expectedSlotFromTool,
+                  candidateCategories: toolClarification?.candidateCategories,
+                  prompt: toolPrompt,
+                  lastUnresolvedToolContext: toolClarification?.lastUnresolvedToolContext
+                }
+              : undefined
+          }
+        : state.conversation
     };
   }
   const toolExecutionMs = Date.now() - toolStart;
@@ -643,6 +744,12 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       pendingWorkflow: state.conversation?.pendingWorkflow?.workflowName,
       pendingWorkflowStatus: state.conversation?.pendingWorkflow?.status,
       pendingQuestion: state.conversation?.pendingQuestion,
+      toolClarificationNeeded: state.conversation?.toolClarification?.clarificationNeeded,
+      clarificationReason: state.conversation?.toolClarification?.clarificationReason,
+      expectedSlotFromTool: state.conversation?.toolClarification?.expectedSlotFromTool,
+      candidateCategories: state.conversation?.toolClarification?.candidateCategories,
+      pendingQuestionPrompt: state.conversation?.pendingQuestion?.prompt,
+      lastUnresolvedToolContext: state.conversation?.toolClarification?.lastUnresolvedToolContext,
       expectedSlot: pendingQuestionContext?.expectedSlot,
       missingSlots: state.conversation?.pendingWorkflow?.missingSlots,
       requiredSlots: state.conversation?.pendingWorkflow?.requiredSlots,
