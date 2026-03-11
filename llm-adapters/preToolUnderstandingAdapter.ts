@@ -33,7 +33,9 @@ function defaultFallback(input: PreToolUnderstandingInput): PreToolUnderstanding
       promptType: "pretool_understanding_v1",
       rawOutput: JSON.stringify({ utterance: input.utterance }),
       validationStatus: "fallback",
-      fallbackBehavior: "Pre-tool API unavailable; deterministic-only understanding used."
+      fallbackBehavior: "Pre-tool API unavailable; deterministic-only understanding used.",
+      providerSelectionReason: "Pre-tool endpoint unavailable from client adapter.",
+      rescueMappingApplied: false
     }
   };
 }

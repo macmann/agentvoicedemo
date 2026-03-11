@@ -367,7 +367,10 @@ export function OpsQaDashboard() {
             {kv("Pre-tool reason", latest?.metadata.preToolUsageReason ?? (latest?.metadata.intentUnderstandingMode === "deterministic" ? "Pre-tool LLM disabled by runtime mode" : "-"))}
             {kv("Provider", latest?.metadata.preToolProvider ?? "-")}
             {kv("Model", latest?.metadata.preToolModel ?? "-")}
+            {kv("Provider Selection", latest?.metadata.preToolProviderSelectionReason ?? "-")}
             {kv("Inferred Support Intent", latest?.metadata.preToolInferredSupportIntent ?? "-")}
+            {kv("Intent Confidence", String(latest?.metadata.preToolIntentConfidence ?? "-"))}
+            {kv("Rescue Mapping Applied", String(latest?.metadata.preToolRescueMappingApplied ?? false))}
             {kv("Turn Act", latest?.metadata.preToolTurnAct ?? "-")}
             {kv("Clarification Needed", String(latest?.metadata.preToolClarificationNeeded ?? false))}
             {kv("Clarification Question", latest?.metadata.preToolClarificationQuestion ?? "-")}
