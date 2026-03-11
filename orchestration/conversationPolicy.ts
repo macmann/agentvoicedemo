@@ -28,14 +28,27 @@ export type ResponseStrategy =
   | "handoff"
   | "bounded_redirect";
 
+export type ResponseMode = "conversational_only" | "task_oriented";
+
+export const CONVERSATIONAL_STRATEGIES: ResponseStrategy[] = [
+  "greet_and_invite",
+  "small_talk_and_invite",
+  "acknowledge_thanks",
+  "farewell_close",
+  "repair_and_reset",
+  "explain_and_continue",
+  "bounded_redirect",
+  "empathy_then_continue"
+];
+
 const GREETING_PATTERNS = [/^hi\b/, /^hello\b/, /^hey\b/, /hey there/];
 const SMALL_TALK_PATTERNS = [/how are you/, /good morning/, /nice to meet you/, /good afternoon/, /good evening/];
 const THANKS_PATTERNS = [/^thanks\b/, /^thank you\b/, /appreciate it/];
 const FAREWELL_PATTERNS = [/^bye\b/, /talk later/, /that'?s all/, /see you/, /goodbye/];
-const CORRECTION_PATTERNS = [/not what i meant/, /that's not what i meant/, /^no,?\b/, /i meant/, /actually/];
-const OBJECTION_PATTERNS = [/why are you asking/, /you('re| are) not listening/, /i haven'?t even said anything yet/, /stop asking/];
+const CORRECTION_PATTERNS = [/not what i meant/, /that's not what i meant/, /^no,?\b/, /i meant/, /actually/, /i haven[’']?t even said anything yet/];
+const OBJECTION_PATTERNS = [/you('re| are) not listening/, /stop asking/, /that doesn't help/, /this isn't helping/];
 const EMOTION_PATTERNS = [/frustrat/, /angry/, /upset/, /annoyed/, /this is ridiculous/, /not happy/];
-const META_PATTERNS = [/what can you do/, /are you a bot/, /what are you/, /how does this work/];
+const META_PATTERNS = [/what can you do/, /are you a bot/, /what are you/, /how does this work/, /why are you asking/];
 const OFFTOPIC_PATTERNS = [/write (me )?a poem/, /favorite movie/, /tell me a joke/, /who won/, /weather/];
 const HANDOFF_PATTERNS = [/talk to (a )?human/, /agent/, /representative/, /person please/];
 
@@ -115,7 +128,7 @@ export function responseForStrategy(input: {
     case "small_talk_and_invite":
       return "I’m doing well, thanks. What can I help you with today?";
     case "acknowledge_thanks":
-      return "You’re welcome. Need help with anything else?";
+      return "You’re welcome. Let me know if you’d like me to check anything else.";
     case "farewell_close":
       return "You’re all set. Take care.";
     case "repair_and_reset":

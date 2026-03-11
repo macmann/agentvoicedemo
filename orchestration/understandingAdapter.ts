@@ -1,4 +1,4 @@
-import { detectTurnAct } from "@/orchestration/conversationPolicy";
+import { CONVERSATIONAL_STRATEGIES, detectTurnAct } from "@/orchestration/conversationPolicy";
 import { parseScenarioSignals } from "@/orchestration/mockScenarios";
 import { ROUTING_CONFIG } from "@/orchestration/routingConfig";
 import { StructuredUnderstandingResult, UnderstandingDiagnostics } from "@/types/session";
@@ -23,6 +23,7 @@ export async function understandWithMock(utterance: string, fallbackBehavior = "
     handoffRecommended: signals.explicitHumanRequest,
     turnAct,
     responseStrategy: turnAct === "greeting" ? "greet_and_invite" : turnAct === "small_talk" ? "small_talk_and_invite" : route.decision === "clarify" ? "ask_clarification" : "continue_workflow",
+    responseMode: CONVERSATIONAL_STRATEGIES.includes(turnAct === "greeting" ? "greet_and_invite" : turnAct === "small_talk" ? "small_talk_and_invite" : route.decision === "clarify" ? "ask_clarification" : "continue_workflow") ? "conversational_only" : "task_oriented",
     refersToPendingQuestion: false,
     resetPendingQuestion: false,
     replacePendingWorkflow: false,

@@ -35,6 +35,7 @@ export interface TesterDebugState {
   dialogueState?: string;
   turnAct?: string;
   responseStrategy?: string;
+  responseMode?: "conversational_only" | "task_oriented";
   refersToPendingQuestion?: boolean;
   resetPendingQuestion?: boolean;
   replacePendingWorkflow?: boolean;

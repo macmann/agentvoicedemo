@@ -1,4 +1,4 @@
-import { detectTurnAct, isSlotNoiseTurnAct, shouldReplaceWorkflow, ResponseStrategy, TurnAct } from "@/orchestration/conversationPolicy";
+import { CONVERSATIONAL_STRATEGIES, detectTurnAct, isSlotNoiseTurnAct, ResponseMode, ResponseStrategy, shouldReplaceWorkflow, TurnAct } from "@/orchestration/conversationPolicy";
 import { parseScenarioSignals } from "@/orchestration/mockScenarios";
 import { ROUTING_CONFIG, UnderstoodIntent } from "@/orchestration/routingConfig";
 import { POLICY_THRESHOLDS } from "@/orchestration/thresholdConstants";
@@ -15,17 +15,22 @@ function toKnownIntent(intent?: string): UnderstoodIntent {
   return (Object.prototype.hasOwnProperty.call(ROUTING_CONFIG, intent) ? intent : "unclear") as UnderstoodIntent;
 }
 
-function strategyForTurnAct(turnAct: TurnAct, inferredIntent: UnderstoodIntent): ResponseStrategy {
+function strategyForTurnAct(turnAct: TurnAct, inferredIntent: UnderstoodIntent, hasActiveTask: boolean): ResponseStrategy {
   if (turnAct === "greeting") return "greet_and_invite";
-  if (turnAct === "small_talk") return inferredIntent === "unclear" ? "small_talk_and_invite" : "continue_workflow";
+  if (turnAct === "small_talk") return "small_talk_and_invite";
   if (turnAct === "thanks") return "acknowledge_thanks";
   if (turnAct === "farewell") return "farewell_close";
-  if (turnAct === "objection") return "explain_and_continue";
+  if (turnAct === "meta_question") return "explain_and_continue";
+  if (turnAct === "objection") return hasActiveTask ? "explain_and_continue" : "repair_and_reset";
   if (turnAct === "correction") return "repair_and_reset";
-  if (turnAct === "emotion") return "empathy_then_continue";
+  if (turnAct === "emotion") return hasActiveTask ? "empathy_then_continue" : "repair_and_reset";
   if (turnAct === "handoff_request") return "handoff";
   if (inferredIntent === "unclear") return "ask_clarification";
   return "continue_workflow";
+}
+
+function responseModeForStrategy(strategy: ResponseStrategy): ResponseMode {
+  return CONVERSATIONAL_STRATEGIES.includes(strategy) ? "conversational_only" : "task_oriented";
 }
 
 export function runPolicyEngine(
@@ -45,6 +50,7 @@ export function runPolicyEngine(
     lowConfidence: previousCounters?.lowConfidence ?? 0
   };
 
+  const hasActiveTask = Boolean(options.pendingQuestion) || Boolean(options.pendingWorkflowName);
   const workflowRequired = options.workflowMode === "workflow" || (options.workflowMode === "auto" && route.decision === "workflow");
   const recommendedWorkflow = workflowRequired ? providerResult?.understanding.recommendedWorkflow ?? route.workflowName : undefined;
 
@@ -59,7 +65,7 @@ export function runPolicyEngine(
   const resetPendingQuestion = Boolean(options.pendingQuestion) && isSlotNoiseTurnAct(turnAct);
   const replacePendingWorkflow = shouldReplaceWorkflow(turnAct, utterance, options.pendingWorkflowName);
 
-  let responseStrategy = strategyForTurnAct(turnAct, inferredIntent);
+  let responseStrategy = strategyForTurnAct(turnAct, inferredIntent, hasActiveTask);
 
   if (offTopic) {
     responseStrategy = "bounded_redirect";
@@ -77,9 +83,11 @@ export function runPolicyEngine(
     selectedRule = "emotion_plus_task_ack_then_execute";
     reason = "User expressed frustration and still needs support action.";
     responseStrategy = "empathy_then_continue";
-  } else if (route.decision === "clarify") {
+  } else if (route.decision === "clarify" && turnAct === "task_request") {
     responseStrategy = "ask_clarification";
   }
+
+  const responseMode = responseModeForStrategy(responseStrategy);
 
   return {
     understanding: {
@@ -93,6 +101,7 @@ export function runPolicyEngine(
       handoffRecommended: providerResult?.understanding.handoffRecommended ?? fallbackSignals.explicitHumanRequest,
       turnAct,
       responseStrategy,
+      responseMode,
       refersToPendingQuestion,
       resetPendingQuestion,
       replacePendingWorkflow,

@@ -82,6 +82,7 @@ export interface StructuredUnderstandingResult {
     | "replace_workflow"
     | "handoff"
     | "bounded_redirect";
+  responseMode: "conversational_only" | "task_oriented";
   refersToPendingQuestion: boolean;
   resetPendingQuestion: boolean;
   replacePendingWorkflow: boolean;
@@ -101,6 +102,10 @@ export interface ResponseGenerationContext {
   originalUtterance: string;
   sentiment?: string;
   empathyNeeded: boolean;
+  turnAct?: StructuredUnderstandingResult["turnAct"];
+  responseStrategy?: StructuredUnderstandingResult["responseStrategy"];
+  responseMode: StructuredUnderstandingResult["responseMode"];
+  hasPendingQuestion: boolean;
   workflowPath: "workflow" | "no_workflow" | "handoff" | "clarify";
   workflowResult: string;
   handoffState: string;
