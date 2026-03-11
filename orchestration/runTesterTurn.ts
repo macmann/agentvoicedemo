@@ -6,6 +6,7 @@ import { buildClarificationPrompt, isSlotNoiseTurnAct, responseForStrategy } fro
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
 import { runToolExecution } from "@/tools/toolRunner";
+import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { ToolExecutionMode } from "@/tools/toolTypes";
 import { PendingQuestionState, SessionState, TtsSettingsView } from "@/types/session";
 import { TesterDebugState, TesterInputSource, VoicePhase } from "@/types/tester";
@@ -109,7 +110,8 @@ export interface RunTesterTurnInput {
   sttCapture?: SessionState["sttCapture"];
   previousSession?: SessionState;
   workflowMode: "auto" | "workflow" | "no_workflow";
-  toolMode: ToolExecutionMode;
+  toolMode?: ToolExecutionMode;
+  runtimeToolConfig?: RuntimeToolConfig;
   forceFallback: boolean;
   voiceModeEnabled: boolean;
   onStage?: (stage: VoicePhase) => void;
@@ -241,12 +243,17 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   if (routing.decision === "workflow") {
     input.onStage?.("checking_tool");
     state = { ...state, routing: { ...routing, dialogueState: "executing_tool" } };
-    const { toolResult, record } = await runToolExecution(state, { forceFallback: input.forceFallback, modeOverride: input.toolMode });
+    const { toolResult, record } = await runToolExecution(state, { forceFallback: input.forceFallback, modeOverride: input.toolMode, runtimeConfig: input.runtimeToolConfig });
     const pendingStatus = state.conversation?.pendingWorkflow ? { ...state.conversation.pendingWorkflow, status: "completed" as const, missingSlots: [] } : undefined;
 
     state = {
       ...state,
-      toolExecution: { ...record, requestPayload: (record.requestPayload as Record<string, unknown>) ?? {}, responsePayload: record.responsePayload as Record<string, unknown> | undefined },
+      toolExecution: {
+        ...record,
+        requestPayload: (record.requestPayload as Record<string, unknown>) ?? {},
+        rawResponsePayload: record.rawResponsePayload as Record<string, unknown> | undefined,
+        normalizedResult: record.normalizedResult as Record<string, unknown> | undefined
+      },
       toolResult,
       routing: state.routing ? { ...state.routing, dialogueState: "responding" } : state.routing,
       conversation: state.conversation ? { ...state.conversation, pendingWorkflow: pendingStatus, pendingQuestion: undefined, lastToolResult: toolResult.result, currentStatus: "processing" } : state.conversation
@@ -408,6 +415,11 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       handoffSummary: state.handoff?.summary,
       providerMode: providerMode(state),
       toolExecutionMode: state.toolExecution?.executionMode,
+      toolEndpoint: state.toolExecution?.endpoint,
+      toolRequestPayload: state.toolExecution?.requestPayload,
+      rawToolResponse: state.toolExecution?.rawResponsePayload,
+      normalizedToolResult: state.toolExecution?.normalizedResult,
+      fallbackActivated: state.toolExecution?.fallbackActivated,
       pendingWorkflow: state.conversation?.pendingWorkflow?.workflowName,
       pendingWorkflowStatus: state.conversation?.pendingWorkflow?.status,
       pendingQuestion: state.conversation?.pendingQuestion,

@@ -6,6 +6,9 @@ import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
 import { SessionState } from "@/types/session";
 import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus, VoicePhase } from "@/types/tester";
+import { useRuntimeToolConfig } from "@/state/useRuntimeToolConfig";
+import { resolveToolExecutionMode } from "@/tools/runtimeToolConfig";
+import { ToolName } from "@/tools/toolTypes";
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -39,6 +42,7 @@ export function useVoiceTester() {
   const capturePromise = useRef<ReturnType<typeof startMicrophoneCapture>["result"] | null>(null);
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
+  const { runtimeConfig, setGlobalMode, setPerToolMode, reset: resetToolSettings, perToolOverrides } = useRuntimeToolConfig();
 
   const appendMessage = (message: TesterMessage) => {
     setConversation((prev) => ({ ...prev, messages: [...prev.messages, message] }));
@@ -112,7 +116,7 @@ export function useVoiceTester() {
         sttCapture,
         previousSession: lastSession,
         workflowMode: "auto",
-        toolMode: "mock",
+        runtimeToolConfig: runtimeConfig,
         forceFallback: false,
         voiceModeEnabled,
         onStage: (phase) => {
@@ -329,6 +333,24 @@ export function useVoiceTester() {
   };
 
   const latestTurn = useMemo(() => conversation.turns[conversation.turns.length - 1], [conversation.turns]);
+  const toolHistory = useMemo(() => conversation.turns
+    .filter((turn) => Boolean(turn.session.toolExecution?.selectedTool))
+    .slice(-12)
+    .reverse()
+    .map((turn, index) => ({
+      id: turn.id,
+      turnNumber: conversation.turns.length - index,
+      timestamp: turn.createdAt,
+      toolName: turn.session.toolExecution?.selectedTool,
+      mode: turn.session.toolExecution?.executionMode,
+      status: turn.session.toolExecution?.executionStatus,
+      latencyMs: turn.session.toolExecution?.executionTimeMs,
+      summary: turn.session.toolExecution?.errorMessage ?? (turn.session.toolExecution?.executionStatus === "success" ? "Tool executed successfully" : "-")
+    })), [conversation.turns]);
+
+  const setToolOverrideMode = (toolName: ToolName, mode: "mock" | "api" | "default") => {
+    setPerToolMode(toolName, mode === "default" ? undefined : mode);
+  };
 
   return {
     conversation,
@@ -345,6 +367,13 @@ export function useVoiceTester() {
     stopListening,
     replayLastAudio,
     stopAudio,
-    resetConversation
+    resetConversation,
+    runtimeConfig,
+    setGlobalToolMode: setGlobalMode,
+    setToolOverrideMode,
+    resetToolSettings,
+    perToolOverrides,
+    resolveToolMode: (toolName: ToolName) => resolveToolExecutionMode(toolName, runtimeConfig),
+    toolHistory
   };
 }

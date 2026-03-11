@@ -6,6 +6,10 @@ import { useMemo, useState } from "react";
 
 export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; session: SessionState }) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+
+  const toolHistory = logs
+    .filter((event) => event.stage === "Tool execution completed")
+    .slice(0, 8);
   const stages = [
     { label: "STT", value: session.latency?.sttMs },
     { label: "Understanding", value: session.latency?.understandingMs },
@@ -99,7 +103,17 @@ export function ExecutionPanel({ logs, session }: { logs: DemoLogEvent[]; sessio
             <p className="text-slate-600">Tool: {session.toolExecution?.selectedTool ?? "—"}</p>
             <p className="text-slate-600">Mode: {session.toolExecution?.executionMode ?? "—"}</p>
             <p className="text-slate-600">Status: {session.toolExecution?.executionStatus ?? "—"}</p>
+            <p className="text-slate-600">Endpoint: {session.toolExecution?.endpoint ?? "—"}</p>
+            <p className="text-slate-600">Latency: {session.toolExecution?.executionTimeMs ?? 0} ms</p>
+            <p className="text-slate-600">Fallback activated: {String(session.toolExecution?.fallbackActivated ?? false)}</p>
             <p className="text-slate-600">Error: {session.toolExecution?.errorMessage ?? "—"}</p>
+          </div>
+
+          <div className="rounded border border-slate-200 p-2">
+            <p className="font-medium">Recent tool calls</p>
+            <div className="mt-1 space-y-1">
+              {toolHistory.length === 0 ? <p className="text-slate-500">No tool calls yet.</p> : toolHistory.map((event) => <p key={event.id} className="text-slate-600">{event.timestamp} • {event.message}</p>)}
+            </div>
           </div>
 
           <div className="rounded border border-slate-200 p-2">
