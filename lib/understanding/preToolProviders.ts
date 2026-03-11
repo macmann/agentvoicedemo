@@ -44,11 +44,12 @@ const PRETOOL_UNDERSTANDING_SCHEMA = {
     entities: {
       type: "object",
       additionalProperties: false,
+      required: ["region", "category", "serviceNameOrRegion", "dateRange"],
       properties: {
-        region: { type: "string" },
-        category: { type: "string" },
-        serviceNameOrRegion: { type: "string" },
-        dateRange: { type: "string" }
+        region: { type: ["string", "null"] },
+        category: { type: ["string", "null"] },
+        serviceNameOrRegion: { type: ["string", "null"] },
+        dateRange: { type: ["string", "null"] }
       }
     },
     clarificationNeeded: { type: "boolean" },

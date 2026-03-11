@@ -23,6 +23,18 @@ export function buildResponseContext(input: BuildResponseContextInput): Response
     (state.conversation?.collectedSlots?.serviceNameOrRegion as string | undefined) ??
     (normalizedToolResult?.matchedRegion as string | undefined) ??
     (normalizedToolResult?.matchedServiceName as string | undefined);
+  const matchedRegion = (normalizedToolResult?.matchedRegion as string | undefined) ?? selectedRegionOrService;
+  const matchedCategory =
+    (state.conversation?.collectedSlots?.serviceCategory as string | undefined) ??
+    (normalizedToolResult?.matchedCategory as string | undefined);
+  const overallStatus = (normalizedToolResult?.overallStatus as string | undefined) ?? (normalizedToolResult?.status as string | undefined);
+  const serviceStatus = (normalizedToolResult?.serviceStatus as string | undefined) ?? overallStatus;
+  const clarificationNeeded =
+    Boolean(state.routing?.decision === "clarify" || state.conversation?.toolClarification?.clarificationNeeded || normalizedToolResult?.clarificationNeeded === true);
+  const clarificationPrompt =
+    (normalizedToolResult?.clarificationPrompt as string | undefined) ??
+    state.routing?.clarificationPrompt ??
+    state.conversation?.toolClarification?.prompt;
 
   return {
     supportIntent,
@@ -39,9 +51,15 @@ export function buildResponseContext(input: BuildResponseContextInput): Response
     toolName: state.toolResult?.toolName,
     normalizedToolResult,
     selectedRegionOrService,
-    selectedCategory: (state.conversation?.collectedSlots?.serviceCategory as string | undefined) ?? (normalizedToolResult?.matchedCategory as string | undefined),
+    matchedRegion,
+    matchedCategory,
+    overallStatus,
+    serviceStatus,
+    clarificationNeeded,
+    clarificationPrompt,
+    selectedCategory: matchedCategory,
     announcementSummary: state.toolResult?.toolName === "fetch_notifications" ? `${((normalizedToolResult?.notifications as Array<unknown> | undefined) ?? []).length} active` : undefined,
-    clarificationStillNeeded: Boolean(state.routing?.decision === "clarify" || state.conversation?.toolClarification?.clarificationNeeded),
+    clarificationStillNeeded: clarificationNeeded,
     followupCorrectionTurn,
     groundedToolResultUsed,
     previousToolContext: previousSession?.toolExecution
