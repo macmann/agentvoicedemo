@@ -4,3 +4,18 @@
 
 /* Basic typography defaults for MDX content */
 .prose a { text-decoration: underline; }
+
+@keyframes fadeInFast {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-fast {
+  animation: fadeInFast 0.18s ease-out;
+}
