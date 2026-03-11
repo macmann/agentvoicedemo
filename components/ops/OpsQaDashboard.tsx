@@ -353,6 +353,9 @@ export function OpsQaDashboard() {
 
           <PanelCard title="Pre-tool Understanding">
             {kv("Intent mode", latest?.metadata.intentModeLabel ?? "-")}
+            {kv("Pre-tool used", String(latest?.metadata.preToolUnderstandingUsed ?? false))}
+            {kv("Pre-tool status", latest?.metadata.preToolUsageStatus ?? "-")}
+            {kv("Pre-tool reason", latest?.metadata.preToolUsageReason ?? (latest?.metadata.intentUnderstandingMode === "deterministic" ? "Pre-tool LLM disabled by runtime mode" : "-"))}
             {kv("Provider", latest?.metadata.preToolProvider ?? "-")}
             {kv("Model", latest?.metadata.preToolModel ?? "-")}
             {kv("Inferred Support Intent", latest?.metadata.preToolInferredSupportIntent ?? "-")}
@@ -360,7 +363,9 @@ export function OpsQaDashboard() {
             {kv("Clarification Needed", String(latest?.metadata.preToolClarificationNeeded ?? false))}
             {kv("Clarification Question", latest?.metadata.preToolClarificationQuestion ?? "-")}
             {kv("Entities", JSON.stringify(latest?.metadata.preToolEntities ?? {}))}
-            {kv("Latency", `${latest?.metadata.latency?.preToolUnderstandingMs ?? "-"} ms`)}
+            {kv("Latency", `${latest?.metadata.preToolLatencyMs ?? latest?.metadata.latency?.preToolUnderstandingMs ?? "-"} ms`)}
+            {kv("Usage status", latest?.metadata.preToolUsageStatus ?? "-")}
+            {kv("Usage reason", latest?.metadata.preToolUsageReason ?? (latest?.metadata.intentUnderstandingMode === "deterministic" ? "Pre-tool LLM disabled by runtime mode" : "-"))}
           </PanelCard>
 
           <PanelCard title="Tool Execution">

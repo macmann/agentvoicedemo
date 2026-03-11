@@ -67,6 +67,10 @@ export interface TesterDebugState {
   };
   preToolProvider?: "openai" | "mock";
   preToolModel?: string;
+  preToolUnderstandingUsed?: boolean;
+  preToolUsageStatus?: "used" | "disabled_by_mode" | "unavailable_or_failed" | "fallback_to_deterministic";
+  preToolUsageReason?: string;
+  preToolLatencyMs?: number;
   preToolInferredSupportIntent?: "service_status" | "announcements" | "none";
   preToolTurnAct?: string;
   preToolClarificationNeeded?: boolean;

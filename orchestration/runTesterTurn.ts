@@ -415,6 +415,8 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   let preToolUnderstandingMs = 0;
   let preTool = input.previousSession?.preToolUnderstanding;
   let preToolDiagnostics = input.previousSession?.preToolUnderstandingDiagnostics;
+  let preToolUsageStatus: "used" | "disabled_by_mode" | "unavailable_or_failed" | "fallback_to_deterministic" = "disabled_by_mode";
+  let preToolUsageReason = "Pre-tool LLM disabled by runtime mode.";
 
   if (intentUnderstandingMode === "llm_assisted") {
     const preToolStart = Date.now();
@@ -444,6 +446,17 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
     preToolUnderstandingMs = Date.now() - preToolStart;
     preTool = preToolResult.understanding;
     preToolDiagnostics = preToolResult.diagnostics;
+
+    if (preToolDiagnostics.validationStatus === "valid" || preToolDiagnostics.validationStatus === "sanitized") {
+      preToolUsageStatus = "used";
+      preToolUsageReason = "Pre-tool LLM used for this turn before deterministic routing.";
+    } else if (preToolDiagnostics.validationStatus === "fallback") {
+      preToolUsageStatus = "fallback_to_deterministic";
+      preToolUsageReason = preToolDiagnostics.fallbackBehavior || "Pre-tool response failed validation; deterministic fallback used.";
+    } else {
+      preToolUsageStatus = "unavailable_or_failed";
+      preToolUsageReason = "Pre-tool provider unavailable; deterministic-only understanding used.";
+    }
   }
 
   const understandingStart = Date.now();
@@ -858,6 +871,10 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
             : "reset",
       outOfScopeDemoRequest: state.understanding?.intent === "unsupported_support",
       entities: state.understanding?.entities,
+      preToolUnderstandingUsed: preToolUsageStatus === "used",
+      preToolUsageStatus,
+      preToolUsageReason,
+      preToolLatencyMs: intentUnderstandingMode === "llm_assisted" ? preToolUnderstandingMs : 0,
       preToolProvider: state.preToolUnderstandingDiagnostics?.provider,
       preToolModel: state.preToolUnderstandingDiagnostics?.model,
       preToolInferredSupportIntent: state.preToolUnderstanding?.inferredSupportIntent,

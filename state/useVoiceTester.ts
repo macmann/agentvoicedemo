@@ -41,7 +41,7 @@ export function useVoiceTester() {
   const capturePromise = useRef<ReturnType<typeof startMicrophoneCapture>["result"] | null>(null);
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
-  const { config, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
+  const { config, setConfig, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
   const runtimeConfig = config.toolConfig;
   const voiceModeEnabled = config.voiceModeEnabled;
 
@@ -375,6 +375,7 @@ export function useVoiceTester() {
     resetConversation,
     runtimeConfig,
     dashboardConfig: config,
+    setDashboardConfig: setConfig,
     setGlobalToolMode: setGlobalMode,
     setToolOverrideMode,
     resetToolSettings,

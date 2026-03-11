@@ -6,6 +6,7 @@ import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
 import { ToolName } from "@/tools/toolTypes";
 import { useVoiceTester } from "@/state/useVoiceTester";
 import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
+import { IntentUnderstandingMode } from "@/state/useDashboardRuntimeConfig";
 
 function StatusPill({ label, active }: { label: string; active: boolean }) {
   return <span className={cn("rounded-full px-2 py-1 text-xs", active ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500")}>{label}</span>;
@@ -15,7 +16,7 @@ function formatMs(value?: number) {
   return typeof value === "number" ? `${Math.round(value)} ms` : "-";
 }
 
-function MessageBubble({ message }: { message: TesterMessage }) {
+function MessageBubble({ message, preToolUsed }: { message: TesterMessage; preToolUsed?: boolean }) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
 
@@ -23,6 +24,7 @@ function MessageBubble({ message }: { message: TesterMessage }) {
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
       <div className={cn("max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm", isUser && "bg-blue-600 text-white", !isUser && !isSystem && "bg-white text-slate-900 border border-slate-200", isSystem && "bg-amber-50 text-amber-900 border border-amber-200")}>
         <p>{message.text}</p>
+        {!isUser && preToolUsed && <p className="mt-2 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">Used pre-tool LLM</p>}
       </div>
     </div>
   );
@@ -30,12 +32,12 @@ function MessageBubble({ message }: { message: TesterMessage }) {
 
 function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetrics; providerMode?: string }) {
   const rows = [
-    ["STT finalization", formatMs(latency?.sttFinalizationMs)],
-    ["Understanding", formatMs(latency?.understandingMs)],
+    ["Pre-tool understanding", formatMs(latency?.preToolUnderstandingMs)],
     ["Routing/policy", formatMs(latency?.routingPolicyMs)],
     ["Tool execution", formatMs(latency?.toolExecutionMs)],
     ["Response generation", formatMs(latency?.responseGenerationMs)],
-    ["TTS first audio", formatMs(latency?.ttsFirstAudioMs)]
+    ["TTS first audio", formatMs(latency?.ttsFirstAudioMs)],
+    ["Total turn", formatMs(latency?.totalTurnMs)]
   ] as const;
 
   return (
@@ -51,7 +53,7 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
         </div>
       </div>
       <p className="mt-1 text-slate-500">Provider mode: {providerMode ?? "-"}</p>
-      <div className="mt-2 grid grid-cols-2 gap-1 text-slate-700">
+      <div className="mt-2 grid grid-cols-1 gap-1 text-slate-700 sm:grid-cols-2">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-2 rounded bg-white px-2 py-1">
             <span>{label}</span>
@@ -61,6 +63,22 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
       </div>
     </div>
   );
+}
+
+
+function intentModeLabel(mode: IntentUnderstandingMode | undefined) {
+  return mode === "llm_assisted" ? "LLM-assisted" : "Deterministic";
+}
+
+function yesNo(value?: boolean) {
+  return value ? "yes" : "no";
+}
+
+function renderPreToolReason(latestTurn: ReturnType<typeof useVoiceTester>["latestTurn"]) {
+  if (!latestTurn) return "No turn yet.";
+  const mode = latestTurn.metadata.intentUnderstandingMode ?? "deterministic";
+  if (mode === "deterministic") return "Pre-tool LLM disabled by runtime mode";
+  return latestTurn.metadata.preToolUsageReason ?? "Pre-tool LLM status unavailable.";
 }
 
 export function VoiceTesterPage() {
@@ -82,6 +100,8 @@ export function VoiceTesterPage() {
     stopAudio,
     resetConversation,
     runtimeConfig,
+    dashboardConfig,
+    setDashboardConfig,
     setGlobalToolMode,
     setToolOverrideMode,
     resetToolSettings,
@@ -121,6 +141,16 @@ export function VoiceTesterPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", globalMode === "api" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{globalMode === "api" ? "Live API mode" : "Mock mode"}</span>
+            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.intentUnderstandingMode === "llm_assisted" ? "bg-violet-100 text-violet-700" : "bg-slate-200 text-slate-700")}>Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
+            <select
+              className="rounded-full border border-violet-300 bg-white px-2 py-1 text-xs font-medium text-violet-800"
+              value={dashboardConfig.intentUnderstandingMode}
+              onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}
+              aria-label="Intent understanding mode"
+            >
+              <option value="deterministic">Deterministic</option>
+              <option value="llm_assisted">LLM-assisted</option>
+            </select>
             <StatusPill label={statusText} active={status !== "idle"} />
           </div>
         </header>
@@ -131,9 +161,10 @@ export function VoiceTesterPage() {
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {empty && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Try: “Is there an outage?”, “Is FTTH in Berlin down?”, “Any upcoming announcements?”, or “I want to speak to a human.”</div>}
-          {conversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+          {conversation.messages.map((message) => {
+            const turn = message.turnId ? conversation.turns.find((item) => item.id === message.turnId) : undefined;
+            return <MessageBubble key={message.id} message={message} preToolUsed={turn?.metadata.preToolUnderstandingUsed} />;
+          })}
         </div>
 
         <form onSubmit={submit} className="space-y-3 border-t border-slate-200 bg-white p-4">
@@ -171,6 +202,20 @@ export function VoiceTesterPage() {
         </button>
         {isDebugOpen && (
           <div className="space-y-3 p-4 text-xs text-slate-700">
+            <div className="rounded border border-violet-200 bg-violet-50 p-2">
+              <p className="font-semibold">Intent understanding mode</p>
+              <div className="mt-2 grid gap-2">
+                <select
+                  className="w-full rounded border border-violet-300 bg-white p-1"
+                  value={dashboardConfig.intentUnderstandingMode}
+                  onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}
+                >
+                  <option value="deterministic">Deterministic</option>
+                  <option value="llm_assisted">LLM-assisted</option>
+                </select>
+                <p className="text-[11px] text-violet-800">Deterministic: lower latency, stricter interpretation. LLM-assisted: higher latency, better natural-language understanding.</p>
+              </div>
+            </div>
             <div className="rounded border border-slate-200 p-2">
               <p className="font-semibold">Tool Configuration</p>
               <label className="mt-2 block">
@@ -199,10 +244,34 @@ export function VoiceTesterPage() {
               <button type="button" onClick={resetToolSettings} className="mt-2 rounded border border-rose-200 px-2 py-1 text-rose-700">Reset tool settings</button>
             </div>
 
+            <div className="rounded border border-slate-200 bg-slate-50 p-2">
+              <p className="font-semibold">Turn trace summary</p>
+              <div className="mt-1 space-y-1">
+                <div><strong>Input mode used:</strong> {latestTurn?.metadata.intentUnderstandingMode ?? "-"}</div>
+                <div><strong>Parsed support intent:</strong> {latestTurn?.metadata.supportIntent ?? "none"}</div>
+                <div><strong>Parsed entities:</strong> <pre className="mt-1 overflow-x-auto rounded bg-white p-2">{JSON.stringify(latestTurn?.metadata.entities ?? {}, null, 2)}</pre></div>
+                <div><strong>Routing outcome:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
+                <div><strong>Tool selected:</strong> {latestTurn?.metadata.toolCalled ?? "none"}</div>
+                <div><strong>Why clarification happened:</strong> {latestTurn?.metadata.clarificationReason ?? latestTurn?.metadata.preToolUsageReason ?? "-"}</div>
+              </div>
+            </div>
+
             <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>
             <div><strong>Support intent:</strong> {latestTurn?.metadata.supportIntent ?? "none"}</div>
             <div><strong>Active support intent:</strong> {latestTurn?.metadata.activeSupportIntent ?? "-"}</div>
             <div><strong>Request type:</strong> {latestTurn?.metadata.supportRequestType ?? "-"}</div>
+            <div><strong>preToolUnderstandingUsed:</strong> {yesNo(latestTurn?.metadata.preToolUnderstandingUsed)}</div>
+            <div><strong>intentUnderstandingModeUsed:</strong> {latestTurn?.metadata.intentUnderstandingMode ?? "-"}</div>
+            <div><strong>preToolProvider:</strong> {latestTurn?.metadata.preToolProvider ?? "-"}</div>
+            <div><strong>preToolModel:</strong> {latestTurn?.metadata.preToolModel ?? "-"}</div>
+            <div><strong>preToolLatencyMs:</strong> {formatMs(latestTurn?.metadata.preToolLatencyMs)}</div>
+            <div><strong>inferredSupportIntent:</strong> {latestTurn?.metadata.preToolInferredSupportIntent ?? "-"}</div>
+            <div><strong>turnAct:</strong> {latestTurn?.metadata.preToolTurnAct ?? latestTurn?.metadata.turnAct ?? "-"}</div>
+            <div><strong>clarificationNeeded:</strong> {String(latestTurn?.metadata.preToolClarificationNeeded ?? false)}</div>
+            <div><strong>clarificationQuestion:</strong> {latestTurn?.metadata.preToolClarificationQuestion ?? "-"}</div>
+            <div><strong>continuationDetected:</strong> {String(latestTurn?.metadata.preToolContinuationDetected ?? latestTurn?.metadata.continuationDetected ?? false)}</div>
+            <div><strong>correctionDetected:</strong> {String(latestTurn?.metadata.preToolCorrectionDetected ?? false)}</div>
+            <div><strong>Pre-tool decision:</strong> {renderPreToolReason(latestTurn)}</div>
             <div><strong>Continuation detected:</strong> {String(latestTurn?.metadata.continuationDetected ?? false)}</div>
             <div><strong>Corrected slots:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.correctedSlots ?? {}, null, 2)}</pre></div>
             <div><strong>Support intent transition:</strong> {latestTurn?.metadata.supportIntentTransition ?? "-"}</div>
