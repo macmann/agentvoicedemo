@@ -204,12 +204,14 @@ export interface TtsDiagnostics {
 export interface ToolExecutionView {
   selectedTool: "diagnose_connectivity" | "check_outage_status" | "fetch_service_status" | "fetch_notifications" | "reschedule_technician" | "create_support_ticket";
   requestPayload: Record<string, unknown>;
-  responsePayload?: Record<string, unknown>;
+  rawResponsePayload?: Record<string, unknown>;
+  normalizedResult?: Record<string, unknown>;
   executionStatus: "success" | "failure";
   executionTimeMs: number;
   executionMode: "mock" | "api";
   endpoint?: string;
   fallbackBehavior?: string;
+  fallbackActivated: boolean;
   errorMessage?: string;
 }
 

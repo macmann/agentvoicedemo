@@ -9,8 +9,10 @@ import { SessionSummary } from "@/components/demo/SessionSummary";
 import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapture } from "@/audio/sttAdapter";
 import { sampleUtterances } from "@/mock-data/utterances";
 import { SimulationOptions } from "@/orchestration/simulateSession";
-import { ToolExecutionMode } from "@/tools/toolTypes";
+import { resolveToolExecutionMode, TOOL_NAMES } from "@/tools/runtimeToolConfig";
+import { ToolExecutionMode, ToolName } from "@/tools/toolTypes";
 import { useSessionSimulator } from "@/state/useSessionSimulator";
+import { useRuntimeToolConfig } from "@/state/useRuntimeToolConfig";
 import { FlowNodeId } from "@/types/session";
 
 export function VoiceAiDemoApp() {
@@ -22,9 +24,10 @@ export function VoiceAiDemoApp() {
   const [microphoneState, setMicrophoneState] = useState<"idle" | "listening" | "recognized" | "fallback">("idle");
   const [microphoneReason, setMicrophoneReason] = useState<string>();
   const capturePromise = useRef<Promise<{ transcript: string; confidence: number; status: "recognized" | "fallback"; reason?: string; failureType?: "permission_denied" | "recording_failure" | "empty_transcript" | "low_confidence"; timestamps?: Array<{ startMs: number; endMs: number; text: string }>; }> | null>(null);
-  const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, runAll, reset, setSession, traversedEdges } = useSessionSimulator(sampleUtterances[0]);
+  const { runtimeConfig, setGlobalMode, setPerToolMode, reset: resetToolSettings } = useRuntimeToolConfig();
+  const { session, nodeStates, logs, stepIndex, totalSteps, applyStep, runAll, reset, setSession, traversedEdges } = useSessionSimulator(sampleUtterances[0], runtimeConfig);
 
-  const options: SimulationOptions = useMemo(() => ({ forceFallback, workflowMode, toolMode }), [forceFallback, workflowMode, toolMode]);
+  const options: SimulationOptions = useMemo(() => ({ forceFallback, workflowMode, toolMode, runtimeToolConfig: runtimeConfig }), [forceFallback, workflowMode, toolMode, runtimeConfig]);
   const progressLabel = useMemo(() => `${Math.min(stepIndex, totalSteps)}/${totalSteps} steps`, [stepIndex, totalSteps]);
 
   const handleRun = useCallback(async () => {
@@ -129,6 +132,38 @@ export function VoiceAiDemoApp() {
         </div>
       </header>
 
+      <section className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Tool Configuration</h2>
+          <span className={runtimeConfig.globalMode === "api" ? "rounded bg-rose-100 px-2 py-1 text-xs text-rose-700" : "rounded bg-emerald-100 px-2 py-1 text-xs text-emerald-700"}>{runtimeConfig.globalMode === "api" ? "Using OSS API" : "Mock/local mode"}</span>
+        </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          <label className="block">Global mode
+            <select className="ml-2 rounded border border-slate-300 p-1" value={runtimeConfig.globalMode ?? "default"} onChange={(e) => setGlobalMode(e.target.value === "default" ? undefined : (e.target.value as "mock" | "api"))}>
+              <option value="default">Code defaults</option>
+              <option value="mock">Mock</option>
+              <option value="api">Live API</option>
+            </select>
+          </label>
+          <button type="button" className="rounded border border-rose-200 px-2 py-1 text-rose-700" onClick={resetToolSettings}>Reset tool settings</button>
+        </div>
+        <details className="mt-2">
+          <summary className="cursor-pointer">Per-tool overrides</summary>
+          <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {TOOL_NAMES.map((tool) => (
+              <label key={tool} className="flex items-center justify-between gap-2 rounded border border-slate-200 px-2 py-1 text-xs">
+                <span>{tool}</span>
+                <select value={runtimeConfig.perToolMode?.[tool] ?? "default"} onChange={(e) => setPerToolMode(tool, e.target.value === "default" ? undefined : (e.target.value as "mock" | "api"))} className="rounded border border-slate-300 p-1">
+                  <option value="default">Default</option>
+                  <option value="mock">Mock</option>
+                  <option value="api">API</option>
+                </select>
+              </label>
+            ))}
+          </div>
+        </details>
+      </section>
+
       <div className="grid gap-4 xl:grid-cols-[320px_1fr_340px]">
         <div className="space-y-4">
           <ControlsPanel
@@ -161,6 +196,22 @@ export function VoiceAiDemoApp() {
             nextDisabled={stepIndex >= totalSteps}
           />
           <SessionSummary session={session} />
+          <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+            <p className="font-semibold">Tool Execution Monitor</p>
+            <p>Workflow: {session.routing?.workflowName ?? "-"}</p>
+            <p>Tool: {session.toolExecution?.selectedTool ?? "-"}</p>
+            <p>Mode: {session.toolExecution?.executionMode ?? (session.toolExecution?.selectedTool ? resolveToolExecutionMode(session.toolExecution.selectedTool as ToolName, runtimeConfig) : "-")}</p>
+            <p>Endpoint: {session.toolExecution?.endpoint ?? "-"}</p>
+            <p>Status: {session.toolExecution?.executionStatus ?? "-"}</p>
+            <p>Latency: {session.toolExecution?.executionTimeMs ?? 0} ms</p>
+            <p>Fallback: {String(session.toolExecution?.fallbackActivated ?? false)}</p>
+            <p className="mt-1">Request</p>
+            <pre className="overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(session.toolExecution?.requestPayload ?? {}, null, 2)}</pre>
+            <p className="mt-1">Raw response</p>
+            <pre className="overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(session.toolExecution?.rawResponsePayload ?? {}, null, 2)}</pre>
+            <p className="mt-1">Normalized result</p>
+            <pre className="overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(session.toolExecution?.normalizedResult ?? {}, null, 2)}</pre>
+          </section>
         </div>
 
         <div className="h-[420px]">

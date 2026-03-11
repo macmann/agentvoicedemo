@@ -4,6 +4,7 @@ import { Dispatch, SetStateAction, useMemo, useRef, useState } from "react";
 import { buildSimulationSteps, SimulationOptions } from "@/orchestration/simulateSession";
 import { getUnderstandingResult } from "@/orchestration/understandingAdapter";
 import { DemoLogEvent, FlowNodeId, NodeVisualState, SessionState } from "@/types/session";
+import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 
 const defaultNodeStates: Record<FlowNodeId, NodeVisualState> = {
   stt: "idle",
@@ -15,7 +16,7 @@ const defaultNodeStates: Record<FlowNodeId, NodeVisualState> = {
   handoff: "idle"
 };
 
-export function useSessionSimulator(initialUtterance: string) {
+export function useSessionSimulator(initialUtterance: string, runtimeToolConfig?: RuntimeToolConfig) {
   const [session, setSession] = useState<SessionState>({ utterance: initialUtterance, sttInputMode: "text", sttStreamingSimulated: true });
   const sessionRef = useRef<SessionState>({ utterance: initialUtterance, sttInputMode: "text", sttStreamingSimulated: true });
   const [nodeStates, setNodeStates] = useState(defaultNodeStates);
@@ -24,7 +25,7 @@ export function useSessionSimulator(initialUtterance: string) {
   const [running, setRunning] = useState(false);
   const [traversedEdges, setTraversedEdges] = useState<string[]>([]);
 
-  const activeSteps = useMemo(() => buildSimulationSteps({ forceFallback: false, workflowMode: "auto", toolMode: "mock" }), []);
+  const activeSteps = useMemo(() => buildSimulationSteps({ forceFallback: false, workflowMode: "auto", toolMode: "mock", runtimeToolConfig }), [runtimeToolConfig]);
 
   const setSessionState: Dispatch<SetStateAction<SessionState>> = (value) => {
     setSession((prev) => {
@@ -59,7 +60,7 @@ export function useSessionSimulator(initialUtterance: string) {
   };
 
   const applyStep = async (index: number, options: SimulationOptions) => {
-    const steps = buildSimulationSteps(options);
+    const steps = buildSimulationSteps({ ...options, runtimeToolConfig });
     const step = steps[index];
 
     if (!step) {

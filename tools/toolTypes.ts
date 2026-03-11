@@ -120,6 +120,7 @@ export interface ToolFailureResult {
   mode: ToolExecutionMode;
   endpoint?: string;
   fallback_behavior?: string;
+  raw_response?: unknown;
 }
 
 export interface ToolSuccessResult<TName extends ToolName = ToolName> {
@@ -130,6 +131,7 @@ export interface ToolSuccessResult<TName extends ToolName = ToolName> {
   mode: ToolExecutionMode;
   endpoint?: string;
   fallback_behavior?: string;
+  raw_response?: unknown;
 }
 
 export type ToolExecutionResult = ToolFailureResult | ToolSuccessResult;
@@ -142,11 +144,13 @@ export interface ToolContext {
 export interface ToolExecutionRecord {
   selectedTool: ToolName;
   requestPayload: unknown;
-  responsePayload?: unknown;
+  rawResponsePayload?: unknown;
+  normalizedResult?: unknown;
   executionStatus: "success" | "failure";
   executionTimeMs: number;
   executionMode: ToolExecutionMode;
   endpoint?: string;
   fallbackBehavior?: string;
+  fallbackActivated: boolean;
   errorMessage?: string;
 }

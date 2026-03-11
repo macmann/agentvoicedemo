@@ -40,6 +40,14 @@ export async function executeApiTool<TName extends ToolName>(
       config.timeoutMs
     );
 
+    const rawText = await response.text();
+    let rawPayload: unknown = rawText;
+    try {
+      rawPayload = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      rawPayload = rawText;
+    }
+
     if (!response.ok) {
       return {
         tool_name: toolName,
@@ -48,11 +56,12 @@ export async function executeApiTool<TName extends ToolName>(
         mode: "api",
         endpoint: config.endpoint,
         error: `API request failed (${response.status})`,
-        fallback_behavior: config.fallbackBehavior
+        fallback_behavior: config.fallbackBehavior,
+        raw_response: rawPayload
       };
     }
 
-    const data = (await response.json()) as Record<string, unknown>;
+    const data = (typeof rawPayload === "object" && rawPayload ? rawPayload : {}) as Record<string, unknown>;
     if (data.status !== "success") {
       return {
         tool_name: toolName,
@@ -61,7 +70,8 @@ export async function executeApiTool<TName extends ToolName>(
         mode: "api",
         endpoint: config.endpoint,
         error: String(data.error ?? "API tool returned failure"),
-        fallback_behavior: config.fallbackBehavior
+        fallback_behavior: config.fallbackBehavior,
+        raw_response: rawPayload
       };
     }
 
@@ -72,7 +82,8 @@ export async function executeApiTool<TName extends ToolName>(
       result: (data.result ?? {}) as never,
       mode: "api",
       endpoint: config.endpoint,
-      fallback_behavior: config.fallbackBehavior
+      fallback_behavior: config.fallbackBehavior,
+      raw_response: rawPayload
     };
   } catch (error) {
     return {

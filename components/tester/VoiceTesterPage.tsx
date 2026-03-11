@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
+import { ToolName } from "@/tools/toolTypes";
 import { useVoiceTester } from "@/state/useVoiceTester";
 import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
 
@@ -63,11 +65,35 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
 
 export function VoiceTesterPage() {
   const [text, setText] = useState("");
-  const { conversation, latestTurn, voiceModeEnabled, setVoiceModeEnabled, isProcessing, isDebugOpen, setIsDebugOpen, playbackStatus, sttState, runTurn, startListening, stopListening, replayLastAudio, stopAudio, resetConversation } = useVoiceTester();
+  const {
+    conversation,
+    latestTurn,
+    voiceModeEnabled,
+    setVoiceModeEnabled,
+    isProcessing,
+    isDebugOpen,
+    setIsDebugOpen,
+    playbackStatus,
+    sttState,
+    runTurn,
+    startListening,
+    stopListening,
+    replayLastAudio,
+    stopAudio,
+    resetConversation,
+    runtimeConfig,
+    setGlobalToolMode,
+    setToolOverrideMode,
+    resetToolSettings,
+    perToolOverrides,
+    resolveToolMode,
+    toolHistory
+  } = useVoiceTester();
 
   const status = conversation.status;
   const empty = conversation.messages.length === 0;
   const liveTranscript = sttState.finalTranscript || sttState.interimTranscript;
+  const globalMode = runtimeConfig.globalMode ?? "default";
 
   const statusText = useMemo(() => {
     if (status === "listening") return sttState.isSpeechDetected ? "Listening" : "Listening (waiting for speech)";
@@ -86,14 +112,17 @@ export function VoiceTesterPage() {
   };
 
   return (
-    <main className="grid gap-4 lg:grid-cols-[1fr_320px]">
+    <main className="grid gap-4 lg:grid-cols-[1fr_380px]">
       <section className="flex min-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50">
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
             <h1 className="text-lg font-semibold">Voice Testing UI</h1>
             <p className="text-xs text-slate-500">Product-style support assistant sandbox using deterministic mocked pipeline.</p>
           </div>
-          <StatusPill label={statusText} active={status !== "idle"} />
+          <div className="flex items-center gap-2">
+            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", globalMode === "api" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{globalMode === "api" ? "Live API mode" : "Mock mode"}</span>
+            <StatusPill label={statusText} active={status !== "idle"} />
+          </div>
         </header>
 
         <div className="space-y-3 border-b border-slate-200 px-4 py-3">
@@ -142,29 +171,59 @@ export function VoiceTesterPage() {
         </button>
         {isDebugOpen && (
           <div className="space-y-3 p-4 text-xs text-slate-700">
-            <div><strong>STT provider mode:</strong> {sttState.providerMode}</div>
-            <div><strong>STT interim transcript:</strong> {sttState.interimTranscript || "-"}</div>
-            <div><strong>STT final transcript:</strong> {sttState.finalTranscript || "-"}</div>
-            <div><strong>Voice phase:</strong> {latestTurn?.metadata.voicePhase ?? statusText}</div>
-            <div><strong>Filler used:</strong> {latestTurn?.metadata.fillerUsed ? "yes" : "no"}</div>
-            <div><strong>Filler text:</strong> {latestTurn?.metadata.fillerText ?? "-"}</div>
-            <div><strong>TTFA:</strong> {formatMs(latestTurn?.metadata.latency?.ttfaMs)}</div>
-            <div><strong>TTS provider mode:</strong> {latestTurn?.metadata.ttsProviderMode ?? "-"}</div>
-            <div><strong>Tool vs filler overlap:</strong> {formatMs(latestTurn?.metadata.latency?.fillerSpeechOverlapMs)}</div>
-            <div><strong>Intent:</strong> {latestTurn?.metadata.intent ?? "-"}</div>
-            <div><strong>Turn act:</strong> {latestTurn?.metadata.turnAct ?? "-"}</div>
-            <div><strong>Response strategy:</strong> {latestTurn?.metadata.responseStrategy ?? "-"}</div>
-            <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
-            <div><strong>Response mode:</strong> {latestTurn?.metadata.responseMode ?? "-"}</div>
-            <div><strong>Refers to pending question:</strong> {String(latestTurn?.metadata.refersToPendingQuestion ?? false)}</div>
-            <div><strong>Reset pending question:</strong> {String(latestTurn?.metadata.resetPendingQuestion ?? false)}</div>
-            <div><strong>Replace pending workflow:</strong> {String(latestTurn?.metadata.replacePendingWorkflow ?? false)}</div>
-            <div><strong>Pending workflow transition:</strong> {latestTurn?.metadata.pendingWorkflowTransition ?? "continued"}</div>
+            <div className="rounded border border-slate-200 p-2">
+              <p className="font-semibold">Tool Configuration</p>
+              <label className="mt-2 block">
+                <span className="mb-1 block">Global tool mode</span>
+                <select className="w-full rounded border border-slate-300 p-1" value={globalMode} onChange={(e) => setGlobalToolMode(e.target.value === "default" ? undefined : (e.target.value as "mock" | "api"))}>
+                  <option value="default">Code defaults</option>
+                  <option value="mock">Mock</option>
+                  <option value="api">Live API</option>
+                </select>
+              </label>
+              <details className="mt-2">
+                <summary className="cursor-pointer">Advanced per-tool overrides</summary>
+                <div className="mt-2 space-y-2">
+                  {TOOL_NAMES.map((toolName) => (
+                    <label key={toolName} className="flex items-center justify-between gap-2">
+                      <span>{toolName}</span>
+                      <select value={perToolOverrides.find((item) => item.toolName === toolName)?.mode ?? "default"} onChange={(e) => setToolOverrideMode(toolName as ToolName, e.target.value as "mock" | "api" | "default")} className="rounded border border-slate-300 p-1">
+                        <option value="default">Default</option>
+                        <option value="mock">Mock</option>
+                        <option value="api">API</option>
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </details>
+              <button type="button" onClick={resetToolSettings} className="mt-2 rounded border border-rose-200 px-2 py-1 text-rose-700">Reset tool settings</button>
+            </div>
+
             <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>
             <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>
-            <div><strong>Provider mode:</strong> {latestTurn?.metadata.providerMode ?? "mock"}</div>
+            <div><strong>Resolved mode:</strong> {latestTurn?.metadata.toolCalled ? resolveToolMode(latestTurn.metadata.toolCalled as ToolName) : "-"}</div>
             <div><strong>Tool execution mode:</strong> {latestTurn?.metadata.toolExecutionMode ?? "-"}</div>
-            <div><strong>Latency:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.latency ?? {}, null, 2)}</pre></div>
+            <div><strong>Fallback activated:</strong> {String(latestTurn?.metadata.fallbackActivated ?? false)}</div>
+            <div><strong>Endpoint:</strong> {latestTurn?.metadata.toolEndpoint ?? "-"}</div>
+            <div><strong>Request payload:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.toolRequestPayload ?? {}, null, 2)}</pre></div>
+            <div><strong>Raw response:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.rawToolResponse ?? {}, null, 2)}</pre></div>
+            <div><strong>Normalized result:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.normalizedToolResult ?? {}, null, 2)}</pre></div>
+            <div><strong>Execution latency:</strong> {formatMs(latestTurn?.session.toolExecution?.executionTimeMs)}</div>
+            <div><strong>Fallback behavior:</strong> {latestTurn?.session.toolExecution?.fallbackBehavior ?? "-"}</div>
+
+            <div className="rounded border border-slate-200 p-2">
+              <p className="font-semibold">Recent tool calls</p>
+              <div className="mt-2 max-h-40 overflow-auto">
+                {toolHistory.map((entry) => (
+                  <div key={entry.id} className="mb-2 rounded border border-slate-100 p-1">
+                    <div>#{entry.turnNumber} {new Date(entry.timestamp).toLocaleTimeString()}</div>
+                    <div>{entry.toolName} • {entry.mode} • {entry.status} • {formatMs(entry.latencyMs)}</div>
+                    <div className="text-slate-500">{entry.summary}</div>
+                  </div>
+                ))}
+                {toolHistory.length === 0 && <div className="text-slate-500">No tool calls yet.</div>}
+              </div>
+            </div>
           </div>
         )}
       </aside>

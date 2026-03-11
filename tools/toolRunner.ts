@@ -1,11 +1,13 @@
 import { DEFAULT_TOOL_CONFIGS, ToolConfigMap } from "@/tools/toolConfigs";
 import { createToolRegistry } from "@/tools/registry";
+import { resolveToolExecutionMode, RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { SessionState } from "@/types/session";
 import { ToolExecutionMode, ToolExecutionRecord, ToolExecutionResult, ToolName, ToolRequestByName } from "@/tools/toolTypes";
 
 export interface ToolRunnerOptions {
   forceFallback: boolean;
   modeOverride?: ToolExecutionMode;
+  runtimeConfig?: RuntimeToolConfig;
   configs?: ToolConfigMap;
 }
 
@@ -85,7 +87,8 @@ function withForcedFailure(result: ToolExecutionResult, forceFallback: boolean):
     request: result.request,
     mode: result.mode,
     endpoint: result.endpoint,
-    fallback_behavior: result.fallback_behavior
+    fallback_behavior: result.fallback_behavior,
+    raw_response: result.raw_response
   };
 }
 
@@ -93,9 +96,10 @@ export async function runToolExecution(state: SessionState, options: ToolRunnerO
   const selectedTool = toToolName(state.routing?.workflowName);
   const requestPayload = buildRequest(state, selectedTool);
   const configs = options.configs ?? DEFAULT_TOOL_CONFIGS;
+  const resolvedMode = options.modeOverride ?? resolveToolExecutionMode(selectedTool, options.runtimeConfig);
   const config = {
     ...configs[selectedTool],
-    mode: options.modeOverride ?? configs[selectedTool].mode
+    mode: resolvedMode
   };
 
   const startedAt = Date.now();
@@ -123,12 +127,14 @@ export async function runToolExecution(state: SessionState, options: ToolRunnerO
   const record: ToolExecutionRecord = {
     selectedTool,
     requestPayload,
-    responsePayload: executionResult.status === "success" ? executionResult.result : undefined,
+    rawResponsePayload: executionResult.raw_response,
+    normalizedResult: executionResult.status === "success" ? executionResult.result : undefined,
     executionStatus: executionResult.status,
     executionTimeMs,
     executionMode: config.mode,
     endpoint: config.endpoint,
     fallbackBehavior: config.fallbackBehavior,
+    fallbackActivated: executionResult.status === "failure",
     errorMessage: executionResult.status === "failure" ? executionResult.error : undefined
   };
 

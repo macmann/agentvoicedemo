@@ -45,6 +45,11 @@ export interface TesterDebugState {
   handoffSummary?: string;
   providerMode: "mock" | "live" | "mixed";
   toolExecutionMode?: "mock" | "api";
+  toolEndpoint?: string;
+  toolRequestPayload?: unknown;
+  rawToolResponse?: unknown;
+  normalizedToolResult?: unknown;
+  fallbackActivated?: boolean;
   pendingWorkflow?: string;
   pendingWorkflowStatus?: string;
   pendingQuestion?: PendingQuestionState;

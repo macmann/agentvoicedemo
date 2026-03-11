@@ -156,8 +156,16 @@ export function NodeDetailPanel({ nodeId, session }: { nodeId: FlowNodeId; sessi
               <dd className="whitespace-pre-wrap break-words">{session.toolExecution ? JSON.stringify(session.toolExecution.requestPayload, null, 2) : "—"}</dd>
             </div>
             <div>
-              <dt className="font-medium text-slate-500">Response payload</dt>
-              <dd className="whitespace-pre-wrap break-words">{session.toolExecution ? JSON.stringify(session.toolExecution.responsePayload ?? session.toolExecution.errorMessage, null, 2) : "—"}</dd>
+              <dt className="font-medium text-slate-500">Raw response payload</dt>
+              <dd className="whitespace-pre-wrap break-words">{session.toolExecution ? JSON.stringify(session.toolExecution.rawResponsePayload ?? session.toolExecution.errorMessage, null, 2) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Normalized result</dt>
+              <dd className="whitespace-pre-wrap break-words">{session.toolExecution ? JSON.stringify(session.toolExecution.normalizedResult ?? {}, null, 2) : "—"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-slate-500">Fallback activated</dt>
+              <dd>{String(session.toolExecution?.fallbackActivated ?? false)}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Fallback behavior</dt>

@@ -4,6 +4,7 @@ import { getGeneratedResponse } from "@/llm-adapters/responseAdapter";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
 import { runToolExecution } from "@/tools/toolRunner";
+import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { ToolExecutionMode } from "@/tools/toolTypes";
 import { FlowNodeId, SessionState, TtsSettingsView } from "@/types/session";
 import { randomBetween } from "@/utils/format";
@@ -12,6 +13,7 @@ export interface SimulationOptions {
   forceFallback: boolean;
   workflowMode: "auto" | "workflow" | "no_workflow";
   toolMode: ToolExecutionMode;
+  runtimeToolConfig?: RuntimeToolConfig;
 }
 
 export interface SimulationStep {
@@ -102,11 +104,13 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
             toolExecution: {
               selectedTool: "create_support_ticket",
               requestPayload: { skipped: true },
-              responsePayload: { skipped: true, reason: `routing=${state.routing?.decision}` },
+              rawResponsePayload: { skipped: true, reason: `routing=${state.routing?.decision}` },
+              normalizedResult: { skipped: true, reason: `routing=${state.routing?.decision}` },
               executionStatus: "success",
               executionTimeMs: 0,
               executionMode: options.toolMode,
-              fallbackBehavior: "No tool executed for non-workflow path."
+              fallbackBehavior: "No tool executed for non-workflow path.",
+              fallbackActivated: false
             },
             toolResult: {
               provider: options.toolMode === "mock" ? "mock_local" : "api",
@@ -120,7 +124,8 @@ export function buildSimulationSteps(options: SimulationOptions): SimulationStep
 
         const { toolResult, record } = await runToolExecution(state, {
           forceFallback: options.forceFallback,
-          modeOverride: options.toolMode
+          modeOverride: options.toolMode,
+          runtimeConfig: options.runtimeToolConfig
         });
 
         return {
