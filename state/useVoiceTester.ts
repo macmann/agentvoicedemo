@@ -5,7 +5,7 @@ import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapt
 import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
 import { SessionState } from "@/types/session";
-import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus } from "@/types/tester";
+import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus, VoicePhase } from "@/types/tester";
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -42,6 +42,16 @@ export function useVoiceTester() {
 
   const appendMessage = (message: TesterMessage) => {
     setConversation((prev) => ({ ...prev, messages: [...prev.messages, message] }));
+  };
+
+  const phaseToStatus: Record<VoicePhase, TurnStatus> = {
+    idle: "idle",
+    listening: "listening",
+    processing: "thinking",
+    checking_tool: "tool",
+    speaking_filler: "speaking",
+    speaking_final: "speaking",
+    error: "error"
   };
 
   const setStatus = (status: TurnStatus) => setConversation((prev) => ({ ...prev, status }));
@@ -105,14 +115,14 @@ export function useVoiceTester() {
         toolMode: "mock",
         forceFallback: false,
         voiceModeEnabled,
-        onStage: (stage) => {
-          setStatus(stage);
-          if (stage === "tool" && !announcedToolStage) {
+        onStage: (phase) => {
+          setStatus(phaseToStatus[phase]);
+          if (phase === "checking_tool" && !announcedToolStage) {
             announcedToolStage = true;
             appendMessage({
               id: id("msg"),
               role: "system",
-              text: "I’m checking that now, please hold on.",
+              text: "Checking tool results…",
               createdAt: new Date().toISOString(),
               turnId: userTurnId,
               status: "tool"
@@ -136,6 +146,17 @@ export function useVoiceTester() {
 
       setLastSession(output.session);
       setConversation((prev) => ({ ...prev, turns: [...prev.turns, turn] }));
+
+      if (output.fillerResponseText) {
+        appendMessage({
+          id: id("msg"),
+          role: "assistant",
+          text: output.fillerResponseText,
+          createdAt: output.createdAt,
+          turnId: userTurnId,
+          status: "speaking"
+        });
+      }
 
       appendMessage({
         id: id("msg"),

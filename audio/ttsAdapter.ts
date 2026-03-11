@@ -48,16 +48,19 @@ export async function getSpeechSynthesis(text: string, settings: TtsSettingsView
   }
 }
 
-export async function playSynthesizedAudio(tts: TtsDiagnostics): Promise<{ ok: boolean; reason?: string }> {
+export async function playSynthesizedAudio(tts: TtsDiagnostics): Promise<{ ok: boolean; reason?: string; firstAudioMs?: number; completedMs?: number }> {
   stopSynthesizedAudio();
 
   if (typeof window === "undefined") return { ok: false, reason: "Audio playback not available on server." };
+
+  const playbackStart = Date.now();
 
   if (tts.audioUrl) {
     activeAudio = new Audio(tts.audioUrl);
     try {
       await activeAudio.play();
-      return { ok: true };
+      const firstAudioMs = Date.now() - playbackStart;
+      return { ok: true, firstAudioMs, completedMs: firstAudioMs };
     } catch {
       return { ok: false, reason: "Autoplay blocked by browser; use Play button." };
     }
@@ -72,7 +75,8 @@ export async function playSynthesizedAudio(tts: TtsDiagnostics): Promise<{ ok: b
   const voices = window.speechSynthesis.getVoices();
   activeUtterance.voice = voices.find((voice) => voice.name.toLowerCase().includes("en")) ?? null;
   window.speechSynthesis.speak(activeUtterance);
-  return { ok: true };
+  const firstAudioMs = Date.now() - playbackStart;
+  return { ok: true, firstAudioMs, completedMs: firstAudioMs };
 }
 
 export function stopSynthesizedAudio() {
