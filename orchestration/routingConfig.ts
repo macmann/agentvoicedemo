@@ -16,7 +16,7 @@ export interface RouteConfigEntry {
 }
 
 export const INTENT_ROUTING_TABLE: RouteConfigEntry[] = [
-  { intent: "service_status", decision: "workflow", workflowName: "fetch_service_status", reason: "Service status request should query live status feed." },
+  { intent: "service_status", decision: "workflow", workflowName: "check_outage_status", reason: "Service status requires a user region/service target before querying outage status." },
   { intent: "announcements", decision: "workflow", workflowName: "fetch_notifications", reason: "Announcements request should query notification feed." },
   { intent: "talk_to_human", decision: "handoff", reason: "User explicitly requested a human agent." },
   { intent: "unsupported_support", decision: "no_workflow", reason: "Support request is outside the demo scope and should be politely redirected." }

@@ -321,8 +321,11 @@ export function OpsQaDashboard() {
             {kv("Strategy", latest?.metadata.responseStrategy ?? "-")}
             {kv("Routing", latest?.metadata.routingDecision ?? "-")}
             {kv("Workflow", latest?.metadata.workflowSelected ?? "-")}
+            {kv("Required Slots", (latest?.metadata.requiredSlots ?? []).join(", ") || "-")}
             {kv("Pending Q", latest?.metadata.pendingQuestion?.prompt ?? "-")}
             {kv("Missing Slots", (latest?.metadata.missingSlots ?? []).join(", ") || "-")}
+            {kv("Tool Blocked (Missing Slot)", String(latest?.metadata.toolExecutionBlockedDueToMissingSlot ?? false))}
+            {kv("Region Extracted", latest?.metadata.regionExtracted ?? "-")}
           </PanelCard>
 
           <PanelCard title="Tool Execution">

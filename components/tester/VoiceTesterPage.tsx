@@ -209,6 +209,11 @@ export function VoiceTesterPage() {
             <div><strong>Previous tool context:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.previousToolContext ?? {}, null, 2)}</pre></div>
             <div><strong>Out-of-scope demo request:</strong> {String(latestTurn?.metadata.outOfScopeDemoRequest ?? false)}</div>
             <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
+            <div><strong>Required slots:</strong> {(latestTurn?.metadata.requiredSlots ?? []).join(", ") || "-"}</div>
+            <div><strong>Missing slots:</strong> {(latestTurn?.metadata.missingSlots ?? []).join(", ") || "-"}</div>
+            <div><strong>Pending question:</strong> {latestTurn?.metadata.pendingQuestion?.prompt ?? "-"}</div>
+            <div><strong>Tool blocked (missing slot):</strong> {String(latestTurn?.metadata.toolExecutionBlockedDueToMissingSlot ?? false)}</div>
+            <div><strong>Region extracted:</strong> {latestTurn?.metadata.regionExtracted ?? "-"}</div>
             <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>
             <div><strong>Resolved mode:</strong> {latestTurn?.metadata.toolCalled ? resolveToolMode(latestTurn.metadata.toolCalled as ToolName) : "-"}</div>
             <div><strong>Tool execution mode:</strong> {latestTurn?.metadata.toolExecutionMode ?? "-"}</div>

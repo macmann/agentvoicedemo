@@ -16,12 +16,19 @@ export interface ScenarioSignals {
 }
 
 function extractServiceOrRegion(text: string): string | undefined {
-  if (text.includes("ftth")) return "FTTH";
   if (text.includes("berlin")) return "Berlin";
   if (text.includes("munich")) return "Munich";
   if (text.includes("core internet")) return "Core Internet";
   if (text.includes("downtown")) return "Downtown";
-  if (text.includes("mobile")) return "Mobile";
+
+  const regionFromPreposition = text.match(/(?:my home is in|i(?:'m| am) in|service in|status in|in|for)\s+([a-z][a-z\s-]{1,30})/i)?.[1]?.trim();
+  if (regionFromPreposition) {
+    return regionFromPreposition
+      .split(/\s+/)
+      .slice(0, 3)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
 
   const compactRegion = text.match(/^(?:no,?\s+|yeah,?\s+)?([a-z][a-z\s-]{1,30})$/i)?.[1]?.trim();
   if (compactRegion && compactRegion.split(/\s+/).length <= 3) {
@@ -45,15 +52,16 @@ export function parseScenarioSignals(utterance: string): ScenarioSignals {
   const unsupportedSupport = text.includes("reschedule") || text.includes("technician") || text.includes("support ticket") || text.includes("create a ticket") || text.includes("diagnostic") || text.includes("run diagnostics");
   const sttFailureHint = text.includes("[unclear]") || text.includes("mumble");
   const service = extractServiceOrRegion(text);
+  const serviceCategory = text.includes("ftth") ? "FTTH" : text.includes("cable") ? "CABLE" : undefined;
 
   if (explicitHumanRequest) {
     return { intent: "talk_to_human", supportIntent: false, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.98, entities: { request: "human_agent" }, sttFailureHint };
   }
   if (announcements) {
-    return { intent: "announcements", supportIntent: true, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.92, entities: { active: "true", ...(service ? { serviceNameOrRegion: service } : {}) }, sttFailureHint };
+    return { intent: "announcements", supportIntent: true, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.92, entities: { active: "true", ...(service ? { serviceNameOrRegion: service } : {}), ...(serviceCategory ? { serviceCategory } : {}) }, sttFailureHint };
   }
   if (outage) {
-    return { intent: "service_status", supportIntent: true, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.92, entities: { issueType: "connectivity", check: "service_status", ...(service ? { serviceNameOrRegion: service } : {}) }, sttFailureHint };
+    return { intent: "service_status", supportIntent: true, outOfScopeSupport: false, emotionOnly: false, empathyNeeded: frustration, discomfortDetected, explicitHumanRequest, sentiment: frustration ? "negative" : "neutral", confidence: 0.92, entities: { issueType: "connectivity", check: "service_status", ...(service ? { serviceNameOrRegion: service } : {}), ...(serviceCategory ? { serviceCategory } : {}) }, sttFailureHint };
   }
   if (unsupportedSupport) {
     return { intent: "unsupported_support", supportIntent: true, outOfScopeSupport: true, emotionOnly: false, empathyNeeded: discomfortDetected || frustration, discomfortDetected, explicitHumanRequest, sentiment: discomfortDetected || frustration ? "negative" : "neutral", confidence: 0.92, entities: { outOfScopeSupport: "true" }, sttFailureHint };
