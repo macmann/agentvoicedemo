@@ -296,10 +296,26 @@ export function VoiceTesterPage() {
             <div><strong>postToolProvider:</strong> {latestTurn?.metadata.postToolProvider ?? "-"}</div>
             <div><strong>postToolModel:</strong> {latestTurn?.metadata.postToolModel ?? "-"}</div>
             <div><strong>responseGenerationLatencyMs:</strong> {formatMs(latestTurn?.metadata.responseGenerationLatencyMs)}</div>
+            <div><strong>postToolEndpointType:</strong> {latestTurn?.metadata.postToolEndpointType ?? "-"}</div>
+            <div><strong>postToolFallbackOccurred:</strong> {String(latestTurn?.metadata.postToolFallbackOccurred ?? false)}</div>
+            <div><strong>postToolFailureCategory:</strong> {latestTurn?.metadata.postToolFailureCategory ?? "-"}</div>
+            <div><strong>postToolFailureStatusCode:</strong> {latestTurn?.metadata.postToolFailureStatusCode ?? "-"}</div>
+            <div><strong>postToolRequestPayloadBuilt:</strong> {String(latestTurn?.metadata.postToolRequestPayloadBuilt ?? false)}</div>
+            <div><strong>postToolStructuredSchemaUsed:</strong> {String(latestTurn?.metadata.postToolStructuredSchemaUsed ?? false)}</div>
+            <div><strong>postToolJsonSchemaValidationRequested:</strong> {String(latestTurn?.metadata.postToolJsonSchemaValidationRequested ?? false)}</div>
+            <div><strong>postToolFailureResponseBody:</strong> {latestTurn?.metadata.postToolFailureResponseBody ?? "-"}</div>
             <div><strong>groundedToolResultUsed:</strong> {yesNo(latestTurn?.metadata.groundedToolResultUsed)}</div>
             <div><strong>preToolProvider:</strong> {latestTurn?.metadata.preToolProvider ?? "-"}</div>
             <div><strong>preToolModel:</strong> {latestTurn?.metadata.preToolModel ?? "-"}</div>
             <div><strong>preToolProviderSelectionReason:</strong> {latestTurn?.metadata.preToolProviderSelectionReason ?? "-"}</div>
+            <div><strong>preToolEndpointType:</strong> {latestTurn?.metadata.preToolEndpointType ?? "-"}</div>
+            <div><strong>preToolFallbackOccurred:</strong> {String(latestTurn?.metadata.preToolFallbackOccurred ?? false)}</div>
+            <div><strong>preToolFailureCategory:</strong> {latestTurn?.metadata.preToolFailureCategory ?? "-"}</div>
+            <div><strong>preToolFailureStatusCode:</strong> {latestTurn?.metadata.preToolFailureStatusCode ?? "-"}</div>
+            <div><strong>preToolRequestPayloadBuilt:</strong> {String(latestTurn?.metadata.preToolRequestPayloadBuilt ?? false)}</div>
+            <div><strong>preToolStructuredSchemaUsed:</strong> {String(latestTurn?.metadata.preToolStructuredSchemaUsed ?? false)}</div>
+            <div><strong>preToolJsonSchemaValidationRequested:</strong> {String(latestTurn?.metadata.preToolJsonSchemaValidationRequested ?? false)}</div>
+            <div><strong>preToolFailureResponseBody:</strong> {latestTurn?.metadata.preToolFailureResponseBody ?? "-"}</div>
             <div><strong>preToolLatencyMs:</strong> {formatMs(latestTurn?.metadata.preToolLatencyMs)}</div>
             <div><strong>inferredSupportIntent:</strong> {latestTurn?.metadata.preToolInferredSupportIntent ?? "-"}</div>
             <div><strong>intentConfidence:</strong> {latestTurn?.metadata.preToolIntentConfidence ?? "-"}</div>
