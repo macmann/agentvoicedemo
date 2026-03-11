@@ -44,11 +44,36 @@ function extractServiceOrRegion(text: string): string | undefined {
 export function parseScenarioSignals(utterance: string): ScenarioSignals {
   const text = utterance.toLowerCase();
   const turnAct = detectTurnAct(utterance, false);
+  const includesAny = (patterns: string[]) => patterns.some((pattern) => text.includes(pattern));
   const explicitHumanRequest = text.includes("talk to a human") || text.includes("speak to a human") || text.includes("talk to a person") || text.includes("want a human") || text.includes("raise a ticket") || text.includes("open a ticket") || turnAct === "handoff_request";
   const discomfortDetected = text.includes("sick") || text.includes("not feeling well") || text.includes("unwell");
   const frustration = text.includes("frustrating") || text.includes("upset") || text.includes("angry") || turnAct === "emotion" || turnAct === "objection";
-  const outage = text.includes("outage") || text.includes("service down") || text.includes("internet is down") || text.includes("current status") || text.includes("service status") || text.includes("ftth") || text.includes("down?") || /^no,?\s+[a-z]/.test(text) || /service in [a-z]/.test(text) || /my home is in [a-z]/.test(text);
-  const announcements = text.includes("announcement") || text.includes("notification") || text.includes("maintenance") || text.includes("notice");
+  const announcements = includesAny(["announcement", "announcements", "notification", "notifications", "maintenance", "notice"]);
+  const outage =
+    includesAny([
+      "outage",
+      "service down",
+      "internet is down",
+      "current status",
+      "service status",
+      "internet issue",
+      "internet issues",
+      "internet not working",
+      "internet isn't working",
+      "internet is not working",
+      "my internet is not working",
+      "my internet not working",
+      "my home internet",
+      "connection issue",
+      "connectivity issue",
+      "no internet",
+      "network issue",
+      "service"
+    ]) ||
+    text.includes("down?") ||
+    /^no,?\s+[a-z]/.test(text) ||
+    /service in [a-z]/.test(text) ||
+    /my home is in [a-z]/.test(text);
   const unsupportedSupport = text.includes("reschedule") || text.includes("technician") || text.includes("support ticket") || text.includes("create a ticket") || text.includes("diagnostic") || text.includes("run diagnostics");
   const sttFailureHint = text.includes("[unclear]") || text.includes("mumble");
   const service = extractServiceOrRegion(text);
