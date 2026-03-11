@@ -123,6 +123,8 @@ export function useVoiceTester() {
         fillerEnabled: config.fillerEnabled,
         intentUnderstandingMode: config.intentUnderstandingMode,
         postToolResponseMode: config.postToolResponseMode,
+        troubleshootingKbMode: config.troubleshootingKbMode,
+        troubleshootingKbSource: config.troubleshootingKbSource,
         onStage: (phase) => {
           setStatus(phaseToStatus[phase]);
           if (phase === "checking_tool" && !announcedToolStage) {

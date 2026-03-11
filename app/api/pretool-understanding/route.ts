@@ -4,7 +4,7 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     utterance?: string;
     recentConversation?: Array<{ role: string; text: string }>;
-    activeSupportIntent?: "service_status" | "announcements";
+    activeSupportIntent?: "service_status" | "announcements" | "troubleshooting";
     pendingQuestion?: { expectedSlot?: string; prompt?: string };
     pendingWorkflow?: { workflowName?: string; missingSlots?: string[] };
     previousToolContext?: { toolName?: string; normalizedResult?: unknown };

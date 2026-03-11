@@ -147,6 +147,7 @@ export function VoiceTesterPage() {
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", globalMode === "api" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{globalMode === "api" ? "Live API mode" : "Mock mode"}</span>
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.intentUnderstandingMode === "llm_assisted" ? "bg-violet-100 text-violet-700" : "bg-slate-200 text-slate-700")}>Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
             <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.postToolResponseMode === "llm_generated" ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-700")}>Response: {responseModeLabel(dashboardConfig.postToolResponseMode)}</span>
+            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.troubleshootingKbMode === "on" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700")}>Troubleshooting KB: {dashboardConfig.troubleshootingKbMode}</span>
             <select
               className="rounded-full border border-violet-300 bg-white px-2 py-1 text-xs font-medium text-violet-800"
               value={dashboardConfig.intentUnderstandingMode}
@@ -164,6 +165,15 @@ export function VoiceTesterPage() {
             >
               <option value="deterministic">Deterministic</option>
               <option value="llm_generated">LLM-generated</option>
+            </select>
+            <select
+              className="rounded-full border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
+              value={dashboardConfig.troubleshootingKbMode}
+              onChange={(e) => setDashboardConfig((prev) => ({ ...prev, troubleshootingKbMode: e.target.value as "off" | "on" }))}
+              aria-label="Troubleshooting KB mode"
+            >
+              <option value="on">KB on</option>
+              <option value="off">KB off</option>
             </select>
             <StatusPill label={statusText} active={status !== "idle"} />
           </div>
@@ -337,6 +347,13 @@ export function VoiceTesterPage() {
             <div><strong>Continuation detected:</strong> {String(latestTurn?.metadata.continuationDetected ?? false)}</div>
             <div><strong>Corrected slots:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.correctedSlots ?? {}, null, 2)}</pre></div>
             <div><strong>Support intent transition:</strong> {latestTurn?.metadata.supportIntentTransition ?? "-"}</div>
+            <div><strong>Troubleshooting active:</strong> {String(latestTurn?.metadata.troubleshootingActive ?? false)}</div>
+            <div><strong>Troubleshooting mode:</strong> {latestTurn?.metadata.troubleshootingMode ?? "-"}</div>
+            <div><strong>KB source:</strong> {latestTurn?.metadata.troubleshootingKbSource ?? "-"}</div>
+            <div><strong>Selected KB sections:</strong> {latestTurn?.metadata.troubleshootingSelectedKBSections?.join(", ") ?? "-"}</div>
+            <div><strong>Current troubleshooting step:</strong> {latestTurn?.metadata.troubleshootingCurrentStep ?? "-"}</div>
+            <div><strong>Steps shown:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.troubleshootingStepsShown ?? [], null, 2)}</pre></div>
+            <div><strong>Troubleshooting resolution status:</strong> {latestTurn?.metadata.troubleshootingResolutionStatus ?? "-"}</div>
             <div><strong>Previous tool context:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.previousToolContext ?? {}, null, 2)}</pre></div>
             <div><strong>Out-of-scope demo request:</strong> {String(latestTurn?.metadata.outOfScopeDemoRequest ?? false)}</div>
             <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
