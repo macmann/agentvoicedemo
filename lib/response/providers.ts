@@ -50,10 +50,10 @@ function deterministicFromNormalizedResult(context: ResponseGenerationContext): 
 
   if (context.supportIntent === "service_status" || context.toolName === "check_outage_status") {
     const normalizedStatus = statusLabel(context.overallStatus ?? context.serviceStatus);
-    if (normalizedStatus === "OPERATIONAL") return `${target} is currently operational.`;
-    if (normalizedStatus === "PARTIAL_OUTAGE") return `${target} is currently experiencing a partial outage.`;
-    if (normalizedStatus === "MAJOR_OUTAGE") return `${target} is currently experiencing a major outage.`;
-    if (normalizedStatus === "MAINTENANCE") return `${target} is currently under maintenance.`;
+    if (normalizedStatus === "OPERATIONAL") return `Good news — ${target} is currently operational with no broader outage reported.`;
+    if (normalizedStatus === "PARTIAL_OUTAGE") return `I’m sorry — there’s currently a partial outage affecting ${target}. Our teams are actively working to restore full service as quickly as possible.`;
+    if (normalizedStatus === "MAJOR_OUTAGE") return `I’m really sorry — there’s currently a major outage affecting ${target}. Our teams are working urgently to recover service as soon as possible.`;
+    if (normalizedStatus === "MAINTENANCE") return `${target} is currently under planned maintenance. Service should stabilize as soon as that work is complete.`;
   }
 
   return undefined;
@@ -145,7 +145,7 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
           content: [
             {
               type: "input_text",
-              text: "You generate customer-support voice replies grounded only in the supplied context. For service_status: OPERATIONAL means no broader outage; PARTIAL_OUTAGE means partial outage; MAJOR_OUTAGE means major outage; MAINTENANCE means maintenance. If clarificationNeeded=true, ask exactly clarificationPrompt and do not add generic fallback copy. Keep answers natural and concise."
+              text: "You generate customer-support voice replies grounded only in the supplied context. For service_status: OPERATIONAL means no broader outage; PARTIAL_OUTAGE means partial outage; MAJOR_OUTAGE means major outage; MAINTENANCE means maintenance. If status is PARTIAL_OUTAGE or MAJOR_OUTAGE, include a brief apology and a recovery-progress phrase. If status is OPERATIONAL, acknowledge positively without apologizing. If clarificationNeeded=true, ask exactly clarificationPrompt and do not add generic fallback copy. Keep answers natural and concise."
             }
           ]
         },
