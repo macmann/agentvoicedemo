@@ -9,7 +9,7 @@ export const WORKFLOW_SLOT_CONFIG: Record<PendingWorkflowState["workflowName"], 
   check_outage_status: {
     requiredSlots: ["serviceNameOrRegion"],
     prompts: {
-      serviceNameOrRegion: "Can I know the service or region you're asking about?"
+      serviceNameOrRegion: "Sure — what city or region should I check?"
     }
   },
   diagnose_connectivity: {

@@ -72,7 +72,10 @@ export interface TesterDebugState {
   normalizedSlotValue?: string;
   turnHandlingMode?: "answer_to_pending_question" | "fresh_intent_turn" | "support_task_continuation" | "support_task_correction";
   missingSlots?: string[];
+  requiredSlots?: string[];
   collectedSlots?: Record<string, string>;
+  regionExtracted?: string;
+  toolExecutionBlockedDueToMissingSlot?: boolean;
   ttsProviderMode?: "mock_browser" | "openai";
   fillerUsed?: boolean;
   fillerText?: string;

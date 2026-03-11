@@ -51,7 +51,7 @@ function hasStrongIntentShift(text: string): boolean {
 
 
 function parseFollowupSlots(utterance: string): { serviceNameOrRegion?: string; serviceCategory?: string; dateScope?: string } {
-  const lowered = utterance.toLowerCase().trim();
+  const lowered = utterance.toLowerCase().trim().replace(/[?.!,]+$/g, "");
   const result: { serviceNameOrRegion?: string; serviceCategory?: string; dateScope?: string } = {};
 
   const regionMatch = lowered.match(/(?:my home is in|service in|in|for|no,? i mean|no,?)\s+([a-z][a-z\s-]{1,30})$/i);
@@ -66,6 +66,7 @@ function parseFollowupSlots(utterance: string): { serviceNameOrRegion?: string; 
   }
 
   if (lowered.includes("ftth")) result.serviceCategory = "FTTH";
+  if (lowered.includes("cable")) result.serviceCategory = "CABLE";
   if (lowered.includes("this week")) result.dateScope = "this_week";
   if (lowered.includes("today")) result.dateScope = "today";
   if (lowered.includes("tomorrow")) result.dateScope = "tomorrow";
@@ -552,7 +553,10 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       pendingQuestion: state.conversation?.pendingQuestion,
       expectedSlot: pendingQuestionContext?.expectedSlot,
       missingSlots: state.conversation?.pendingWorkflow?.missingSlots,
+      requiredSlots: state.conversation?.pendingWorkflow?.requiredSlots,
       collectedSlots: state.conversation?.collectedSlots,
+      regionExtracted: state.conversation?.collectedSlots?.serviceNameOrRegion,
+      toolExecutionBlockedDueToMissingSlot: state.routing?.decision === "clarify" && (state.conversation?.pendingWorkflow?.missingSlots?.length ?? 0) > 0,
       turnHandlingMode: resolutionMode,
       slotResolutionResult,
       normalizedSlotValue: slotResolutionResult?.normalizedValue,

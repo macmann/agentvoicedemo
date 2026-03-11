@@ -1,7 +1,9 @@
 import { WORKFLOW_SLOT_CONFIG } from "@/orchestration/workflowSlots";
 import { PendingQuestionState, PendingWorkflowState, SessionState } from "@/types/session";
 
-const REGION_OR_SERVICE_HINTS = ["internet", "mobile", "fiber", "core", "downtown", "uptown", "east", "west", "north", "south", "region"];
+const REGION_WORD_HINTS = ["city", "region", "area", "district", "downtown", "uptown", "east", "west", "north", "south"];
+const NON_REGION_PHRASES = ["my home", "at home", "home", "internet", "service", "status", "current status", "outage", "check service status"];
+const KNOWN_REGIONS = ["berlin", "munich", "downtown", "uptown"];
 const POSTCODE_REGEX = /\b([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{5})\b/i;
 const ISO_DATE_REGEX = /\b(\d{4}-\d{2}-\d{2})\b/;
 const AMBIGUOUS_SLOT_ANSWERS = ["not sure", "whatever", "anything", "idk", "don't know", "frustrating", "this is frustrating"];
@@ -72,6 +74,24 @@ function normalizeDeviceScopeSlot(utterance: string): SlotResolutionResult {
   return { matched: false, confidence: "low", reason: "no_match" };
 }
 
+function normalizeRegionLikeValue(raw: string): string | undefined {
+  const cleaned = raw
+    .replace(/[?.!,]+$/g, "")
+    .replace(/^(?:the\s+)?(?:city|region|area)\s+of\s+/i, "")
+    .trim();
+  if (!cleaned) return undefined;
+
+  const lowered = cleaned.toLowerCase();
+  if (NON_REGION_PHRASES.some((phrase) => lowered === phrase || lowered.includes(`${phrase} status`))) return undefined;
+  if (cleaned.length > 40) return undefined;
+
+  return cleaned
+    .split(/\s+/)
+    .slice(0, 3)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function resolvePendingQuestionAnswer(utterance: string, pendingQuestion?: PendingQuestionState): SlotResolutionResult {
   if (!pendingQuestion) return { matched: false, confidence: "low", reason: "no_match" };
 
@@ -92,8 +112,9 @@ export function resolvePendingQuestionAnswer(utterance: string, pendingQuestion?
     if (postcode) {
       return { matched: true, confidence: "high", normalizedValue: postcode.toUpperCase().replace(/\s+/g, ""), rawValue: utterance.trim(), reason: "matched" };
     }
-    if (lowered.length <= 40) {
-      return { matched: true, confidence: REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token)) ? "high" : "medium", normalizedValue: utterance.trim(), rawValue: utterance.trim(), reason: "matched" };
+    const normalizedRegion = extractServiceRegionValue(utterance) ?? normalizeRegionLikeValue(utterance);
+    if (normalizedRegion) {
+      return { matched: true, confidence: REGION_WORD_HINTS.some((token) => lowered.includes(token)) ? "high" : "medium", normalizedValue: normalizedRegion, rawValue: utterance.trim(), reason: "matched" };
     }
     return { matched: false, confidence: "low", reason: "no_match" };
   }
@@ -103,22 +124,20 @@ export function resolvePendingQuestionAnswer(utterance: string, pendingQuestion?
 
 
 function extractServiceRegionValue(utterance: string): string | undefined {
-  const lowered = utterance.toLowerCase().trim();
-  const directRegion = lowered.match(/(?:my home is in|service in|in|for)\s+([a-z][a-z\s-]{1,30})$/i)?.[1]?.trim();
-  if (directRegion) {
-    return directRegion
-      .split(/\s+/)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
+  const lowered = utterance.toLowerCase().trim().replace(/[?.!,]+$/g, "");
+  const directRegion = lowered.match(/(?:\bmy home is in\b|\bi(?:'m| am) in\b|\blocated in\b|\bservice in\b|\bstatus in\b|\bin\b|\bfor\b)\s+([a-z][a-z\s-]{1,30})(?:\s|$)/i)?.[1]?.trim();
+  const normalizedDirect = directRegion ? normalizeRegionLikeValue(directRegion) : undefined;
+  if (normalizedDirect) {
+    return normalizedDirect;
   }
+
+  const knownRegion = KNOWN_REGIONS.find((region) => lowered.includes(region));
+  if (knownRegion) return normalizeRegionLikeValue(knownRegion);
 
   if (/^(?:no,?\s+|yeah,?\s+)?[a-z][a-z\s-]{1,30}$/i.test(lowered)) {
     const bare = lowered.replace(/^(?:no,?\s+|yeah,?\s+)?/, "").trim();
     if (bare && bare.split(/\s+/).length <= 3) {
-      return bare
-        .split(/\s+/)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
+      return normalizeRegionLikeValue(bare);
     }
   }
 
@@ -142,10 +161,10 @@ function extractConversationSlots(utterance: string): Record<string, string> {
   const explicitRegion = extractServiceRegionValue(utterance);
   if (explicitRegion) {
     slots.serviceNameOrRegion = explicitRegion;
-  } else if (REGION_OR_SERVICE_HINTS.some((token) => lowered.includes(token))) {
-    slots.serviceNameOrRegion = utterance.trim();
-    slots.serviceNameOrDevice = utterance.trim();
   }
+
+  if (lowered.includes("ftth")) slots.serviceCategory = "FTTH";
+  if (lowered.includes("cable")) slots.serviceCategory = "CABLE";
 
   if (lowered.includes("router") || lowered.includes("modem") || lowered.includes("device")) {
     slots.serviceNameOrDevice = utterance.trim();

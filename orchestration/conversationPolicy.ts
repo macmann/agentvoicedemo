@@ -101,9 +101,9 @@ export function buildClarificationPrompt(expectedSlot: string, retryCount = 0): 
 
   if (expectedSlot === "serviceNameOrRegion") {
     const variants = [
-      "Which service or area should I check the outage for?",
-      "Can you share the service name or your area so I can check outages?",
-      "Just to confirm, what service or region should I look up?"
+      "Sure — what city or region should I check?",
+      "I can check that. What location are you in?",
+      "Which city or area should I look up?"
     ];
     return variants[Math.min(retryCount, variants.length - 1)];
   }
