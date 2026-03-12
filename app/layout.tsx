@@ -6,10 +6,10 @@ import { Container } from "@/components/layout/Container";
 
 export const metadata: Metadata = {
   title: {
-    default: "Scaffold",
-    template: "%s | Scaffold"
+    default: "Hybrid AI Voice Demo",
+    template: "%s | Hybrid AI Voice Demo"
   },
-  description: "Next.js (App Router) + TypeScript + Tailwind + MDX scaffold"
+  description: "Hybrid AI Voice Demo"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
