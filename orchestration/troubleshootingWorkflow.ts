@@ -148,16 +148,21 @@ export function buildTroubleshootingResponse(input: {
   const suspectedSymptoms = extractSuspectedSymptoms(input.utterance, input.preTool);
   const ranked = rankSectionsBySymptoms({ kb: input.kb, utterance: input.utterance, suspectedSymptoms });
   const selectedSections = ranked.length ? ranked.slice(0, 2) : input.kb.sections.slice(0, 1);
-  const mergedSectionIds = [...new Set([...(input.previous?.selectedKBSections ?? []), ...selectedSections.map((section) => section.id)])];
+  const rankedSectionIds = selectedSections.map((section) => section.id);
+  const previousSectionIds = input.previous?.selectedKBSections ?? [];
+  const mergedSectionIds = [...new Set([...rankedSectionIds, ...previousSectionIds])];
+  const shouldResetProgress = Boolean(
+    input.previous?.active && rankedSectionIds[0] && rankedSectionIds[0] !== previousSectionIds[0]
+  );
 
   const steps = mergedSectionIds
     .map((id) => input.kb.sections.find((section) => section.id === id))
     .filter((section): section is NonNullable<typeof section> => Boolean(section))
     .flatMap((section) => section.steps.map((step) => `${section.title}: ${step}`));
 
-  const currentStepIndex = input.previous ? input.previous.currentStepIndex + 1 : 0;
+  const currentStepIndex = shouldResetProgress ? 0 : input.previous ? input.previous.currentStepIndex + 1 : 0;
   const step = steps[currentStepIndex];
-  const stepsShown = [...(input.previous?.stepsShown ?? []), ...(step ? [step] : [])];
+  const stepsShown = shouldResetProgress ? (step ? [step] : []) : [...(input.previous?.stepsShown ?? []), ...(step ? [step] : [])];
 
   if (!step || stepsShown.length >= maxSteps) {
     const escalationSummary = `Troubleshooting attempted ${stepsShown.length} steps from ${mergedSectionIds.join(", ") || "default"}; issue remains unresolved.`;
@@ -179,7 +184,9 @@ export function buildTroubleshootingResponse(input: {
   }
 
   const intro = input.previous?.active
-    ? "Thanks — let’s try the next troubleshooting step."
+    ? shouldResetProgress
+      ? "Thanks — that helps. Let’s switch to the most relevant troubleshooting steps."
+      : "Thanks — let’s try the next troubleshooting step."
     : "Okay — the wider service looks normal, so let’s try a few troubleshooting steps.";
 
   return {
