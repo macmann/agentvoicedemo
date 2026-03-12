@@ -19,6 +19,7 @@ export interface DashboardRuntimeConfig {
   mockFallbackEnabled: boolean;
   voiceModeEnabled: boolean;
   ttsProviderMode: TtsProviderMode;
+  ttsVoiceStyle: string;
   fillerEnabled: boolean;
   responseMode: "auto" | "conversational_only" | "task_oriented";
   stepThroughMode: boolean;
@@ -40,6 +41,7 @@ const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   mockFallbackEnabled: true,
   voiceModeEnabled: true,
   ttsProviderMode: "openai",
+  ttsVoiceStyle: "calm-neutral",
   fillerEnabled: true,
   responseMode: "auto",
   stepThroughMode: false,
@@ -78,6 +80,7 @@ function sanitizeConfig(raw: unknown): DashboardRuntimeConfig {
     postToolResponseMode,
     troubleshootingKbMode,
     troubleshootingKbSource: typeof candidate.troubleshootingKbSource === "string" && candidate.troubleshootingKbSource.trim() ? candidate.troubleshootingKbSource : DEFAULT_CONFIG.troubleshootingKbSource,
+    ttsVoiceStyle: typeof candidate.ttsVoiceStyle === "string" && candidate.ttsVoiceStyle.trim() ? candidate.ttsVoiceStyle : DEFAULT_CONFIG.ttsVoiceStyle,
     toolConfig: sanitizeRuntimeToolConfig(candidate.toolConfig ?? {})
   };
 }
