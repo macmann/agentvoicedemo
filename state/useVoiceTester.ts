@@ -120,6 +120,7 @@ export function useVoiceTester() {
         runtimeToolConfig: runtimeConfig,
         forceFallback: false,
         voiceModeEnabled,
+        ttsVoiceStyle: config.ttsVoiceStyle,
         fillerEnabled: config.fillerEnabled,
         intentUnderstandingMode: config.intentUnderstandingMode,
         postToolResponseMode: config.postToolResponseMode,

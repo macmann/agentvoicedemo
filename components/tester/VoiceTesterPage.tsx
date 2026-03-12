@@ -247,6 +247,13 @@ export function VoiceTesterPage() {
               </select>
             </label>
             <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Voice style</span>
+              <select className="w-full rounded-lg border border-emerald-300 bg-white p-2" value={dashboardConfig.ttsVoiceStyle} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, ttsVoiceStyle: e.target.value }))}>
+                <option value="calm-neutral">Calm neutral</option>
+                <option value="warm-friendly">Warm friendly</option>
+              </select>
+            </label>
+            <label className="block">
               <span className="mb-1 block font-medium text-slate-700">Global tool mode</span>
               <select className="w-full rounded-lg border border-slate-300 bg-white p-2" value={globalMode} onChange={(e) => setGlobalToolMode(e.target.value === "default" ? undefined : (e.target.value as "mock" | "api"))}>
                 <option value="default">Code defaults</option>

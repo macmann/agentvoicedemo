@@ -14,11 +14,11 @@ import { ToolExecutionMode } from "@/tools/toolTypes";
 import { PendingQuestionState, SessionState, StructuredUnderstandingResult, TtsSettingsView } from "@/types/session";
 import { TesterDebugState, TesterInputSource, VoicePhase } from "@/types/tester";
 
-const DEFAULT_TTS_SETTINGS: TtsSettingsView = {
-  voiceStyle: "calm-neutral",
+const buildTtsSettings = (voiceStyle: string): TtsSettingsView => ({
+  voiceStyle,
   speed: 1,
   streamingEnabled: true
-};
+});
 
 const FILLER_RESPONSES = [
   "Let me check that for you now.",
@@ -369,6 +369,7 @@ export interface RunTesterTurnInput {
   runtimeToolConfig?: RuntimeToolConfig;
   forceFallback: boolean;
   voiceModeEnabled: boolean;
+  ttsVoiceStyle?: string;
   fillerEnabled?: boolean;
   intentUnderstandingMode?: "deterministic" | "llm_assisted";
   postToolResponseMode?: "deterministic" | "llm_generated";
@@ -420,6 +421,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
   }
 
   const pendingQuestionContext = input.previousSession?.conversation?.pendingQuestion;
+  const ttsSettings = buildTtsSettings(input.ttsVoiceStyle ?? "calm-neutral");
 
   input.onStage?.("processing");
   const intentUnderstandingMode = input.intentUnderstandingMode ?? "deterministic";
@@ -712,7 +714,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   if (fillerResponseText) {
     input.onStage?.("speaking_filler");
-    const fillerTts = await getSpeechSynthesis(fillerResponseText, { ...DEFAULT_TTS_SETTINGS, speed: 1.1 });
+    const fillerTts = await getSpeechSynthesis(fillerResponseText, { ...ttsSettings, speed: 1.1 });
     const fillerPlayback = await playSynthesizedAudio(fillerTts);
     fillerTtsFirstAudioMs = fillerPlayback.firstAudioMs ?? fillerTts.firstAudioLatencyMs;
   }
@@ -910,7 +912,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   if (input.voiceModeEnabled && responseText) {
     const ttsStart = Date.now();
-    const tts = await getSpeechSynthesis(responseText, DEFAULT_TTS_SETTINGS);
+    const tts = await getSpeechSynthesis(responseText, ttsSettings);
     const playback = await playSynthesizedAudio(tts);
     ttsCompletionMs = Date.now() - ttsStart;
     ttsFirstAudioMs = playback.firstAudioMs ?? tts.firstAudioLatencyMs;
