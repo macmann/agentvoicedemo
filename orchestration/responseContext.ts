@@ -37,9 +37,13 @@ export function buildResponseContext(input: BuildResponseContextInput): Response
     state.routing?.clarificationPrompt ??
     state.conversation?.toolClarification?.prompt;
 
+  const initialUserQuestion =
+    state.conversation?.turns.find((turn) => turn.role === "user" && turn.text.trim().length > 0)?.text.trim() ?? state.utterance;
+
   return {
     supportIntent,
     postToolResponseMode,
+    initialUserQuestion,
     originalUtterance: state.utterance,
     sentiment: state.understanding?.sentiment,
     empathyNeeded: Boolean(state.understanding?.empathyNeeded),

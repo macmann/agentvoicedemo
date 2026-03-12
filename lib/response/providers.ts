@@ -106,6 +106,8 @@ export async function generateResponseWithMock(context: ResponseGenerationContex
 function buildLlmUserContext(context: ResponseGenerationContext) {
   return {
     supportIntent: context.supportIntent,
+    initialUserQuestion: context.initialUserQuestion,
+    latestUserUtterance: context.originalUtterance,
     toolName: context.toolName,
     normalizedToolResult: context.normalizedToolResult,
     matchedRegion: context.matchedRegion,
@@ -145,7 +147,7 @@ export async function generateResponseWithOpenAI(context: ResponseGenerationCont
           content: [
             {
               type: "input_text",
-              text: "You generate customer-support voice replies grounded only in the supplied context. For service_status: OPERATIONAL means no broader outage; PARTIAL_OUTAGE means partial outage; MAJOR_OUTAGE means major outage; MAINTENANCE means maintenance. If status is PARTIAL_OUTAGE or MAJOR_OUTAGE, include a brief apology and a recovery-progress phrase. If status is OPERATIONAL, acknowledge positively without apologizing. If clarificationNeeded=true, ask exactly clarificationPrompt and do not add generic fallback copy. Keep answers natural and concise."
+              text: "You generate customer-support voice replies grounded only in the supplied context. Treat initialUserQuestion as the user's original problem statement and latestUserUtterance as their most recent turn; use both when composing the answer so the reply stays on-topic and coherent. Prioritize normalizedToolResult when present, and never invent unsupported facts. For service_status: OPERATIONAL means no broader outage; PARTIAL_OUTAGE means partial outage; MAJOR_OUTAGE means major outage; MAINTENANCE means maintenance. If status is PARTIAL_OUTAGE or MAJOR_OUTAGE, include a brief apology and a recovery-progress phrase. If status is OPERATIONAL, acknowledge positively without apologizing. If clarificationNeeded=true, ask exactly clarificationPrompt and do not add generic fallback copy. Keep answers natural, concise, and conversationally human."
             }
           ]
         },
