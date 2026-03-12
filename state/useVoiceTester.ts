@@ -259,6 +259,7 @@ export function useVoiceTester() {
   };
 
   const startListening = async () => {
+    hasStartedVoiceLoop.current = true;
     if (isProcessing) return;
     if (!hasMicrophonePermission.current) {
       const permission = await requestMicrophonePermission();
@@ -339,6 +340,7 @@ export function useVoiceTester() {
   };
 
   const stopListening = async () => {
+    hasStartedVoiceLoop.current = false;
     if (!capturePromise.current) return;
     stopMicrophoneCapture();
     await finalizeListening({ autoSubmitted: false });
@@ -358,6 +360,7 @@ export function useVoiceTester() {
   };
 
   const resetConversation = () => {
+    hasStartedVoiceLoop.current = false;
     stopSynthesizedAudio();
     stopMicrophoneCapture();
     clearDraftMessage();
