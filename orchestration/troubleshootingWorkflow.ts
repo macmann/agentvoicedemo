@@ -233,7 +233,10 @@ export function buildTroubleshootingResponse(input: {
     }
   }
 
-  const suspectedSymptoms = extractSuspectedSymptoms(input.utterance, input.preTool);
+  const detectedSymptoms = extractSuspectedSymptoms(input.utterance, input.preTool);
+  const suspectedSymptoms = detectedSymptoms.length
+    ? [...new Set([...(input.previous?.suspectedSymptoms ?? []), ...detectedSymptoms])]
+    : input.previous?.suspectedSymptoms ?? [];
   if (!input.previous?.active && suspectedSymptoms.length === 0) {
     return {
       state: {
@@ -258,7 +261,10 @@ export function buildTroubleshootingResponse(input: {
   const previousSectionIds = input.previous?.selectedKBSections ?? [];
   const mergedSectionIds = [...new Set([...rankedSectionIds, ...previousSectionIds])];
   const shouldResetProgress = Boolean(
-    input.previous?.active && rankedSectionIds[0] && rankedSectionIds[0] !== previousSectionIds[0]
+    input.previous?.active &&
+      detectedSymptoms.length > 0 &&
+      rankedSectionIds[0] &&
+      rankedSectionIds[0] !== previousSectionIds[0]
   );
 
   const steps = mergedSectionIds
