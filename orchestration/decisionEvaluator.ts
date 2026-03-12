@@ -63,12 +63,16 @@ export function evaluateDeterministicDecision(state: Pick<SessionState, "underst
       };
     }
 
+    const lowConfidencePrompt = intent === "service_status"
+      ? "It sounds like a troubleshooting issue with your home connection. I can guide KB troubleshooting steps, or connect you to a human agent. Which do you prefer?"
+      : "I can help with current service status or announcements. Which one should I check?";
+
     return {
       decision: "clarify",
       selectedRule: "low_confidence_clarify_first",
       reason: "Intent confidence below deterministic threshold.",
       clarificationReason: "low_intent_confidence",
-      clarificationPrompt: "I can help with current service status or announcements. Which one should I check?"
+      clarificationPrompt: lowConfidencePrompt
     };
   }
 
