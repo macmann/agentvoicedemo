@@ -57,6 +57,19 @@ If model output is malformed, the adapter falls back safely to mock/unclear beha
 
 Structured model output never directly executes tools. The existing deterministic routing/policy layer remains the action gate.
 
+## Pre-tool LLM role (current behavior)
+
+The pre-tool LLM is implemented as an **advisory understanding step**, not the sole workflow controller:
+
+- It runs only when `intentUnderstandingMode === "llm_assisted"`.
+- It infers intent and extracts entities into a constrained schema (`service_status | announcements | none`) and can suggest a workflow.
+- It effectively does intent matching against the allowed demo intents by sanitizing to that whitelist; anything else is normalized to `none`/`unclear`.
+- Its output is mapped into `understandingProviderResult`, then passed into the deterministic policy engine.
+- The policy engine does a second routing-table match (`ROUTING_CONFIG`) and may still override low-confidence/unclear cases with deterministic fallback signals before deciding the route.
+- The deterministic policy still makes the final route decision (`workflow`, `clarify`, `handoff`, or `no_workflow`) and controls tool execution.
+
+So today, intent matching exists, but in two guarded stages (LLM schema match + deterministic policy/table match), with workflow driving remaining policy-gated by design.
+
 ## Tool Execution subsystem
 
 Tool execution is implemented as a typed subsystem under `tools/`:

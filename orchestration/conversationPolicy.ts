@@ -52,6 +52,7 @@ const EMOTION_PATTERNS = [/frustrat/, /angry/, /upset/, /annoyed/, /this is ridi
 const META_PATTERNS = [/what can you do/, /are you a bot/, /what are you/, /how does this work/, /why are you asking/];
 const OFFTOPIC_PATTERNS = [/write (me )?a poem/, /favorite movie/, /tell me a joke/, /who won/, /weather/];
 const HANDOFF_PATTERNS = [/talk to (a )?human/, /agent/, /representative/, /person please/];
+const SUPPORT_TASK_PATTERNS = /outage|internet|offline|announcement|notification|maintenance|notice|service status|service down|reschedule|technician|ticket|diagnostic/;
 
 const SLOT_NOISE_TURN_ACTS: TurnAct[] = ["greeting", "small_talk", "correction", "objection", "emotion", "meta_question", "farewell", "thanks"];
 
@@ -63,7 +64,10 @@ export function detectTurnAct(utterance: string, hasPendingQuestion: boolean): T
   const text = utterance.toLowerCase().trim();
   if (!text) return "unclear";
   if (matchesAny(text, HANDOFF_PATTERNS)) return "handoff_request";
-  if (matchesAny(text, GREETING_PATTERNS)) return "greeting";
+  const hasSupportTaskSignal = SUPPORT_TASK_PATTERNS.test(text);
+  const hasGreetingSignal = matchesAny(text, GREETING_PATTERNS);
+  if (hasGreetingSignal && hasSupportTaskSignal) return "task_request";
+  if (hasGreetingSignal) return "greeting";
   if (matchesAny(text, SMALL_TALK_PATTERNS)) return "small_talk";
   if (matchesAny(text, THANKS_PATTERNS)) return "thanks";
   if (matchesAny(text, FAREWELL_PATTERNS)) return "farewell";
@@ -73,7 +77,7 @@ export function detectTurnAct(utterance: string, hasPendingQuestion: boolean): T
   if (matchesAny(text, META_PATTERNS)) return "meta_question";
   if (matchesAny(text, OFFTOPIC_PATTERNS)) return "small_talk";
   if (hasPendingQuestion && text.length <= 40) return "slot_answer";
-  if (/outage|internet|offline|announcement|notification|maintenance|notice|service status|service down|reschedule|technician|ticket|diagnostic/.test(text)) return "task_request";
+  if (hasSupportTaskSignal) return "task_request";
   return "unclear";
 }
 
