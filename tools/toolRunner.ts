@@ -23,6 +23,11 @@ function toToolName(workflowName?: string): ToolName {
 function buildRequest(state: SessionState, toolName: ToolName): ToolRequestByName[ToolName] {
   const entities = state.understanding?.entities ?? {};
   const slots = state.conversation?.collectedSlots ?? {};
+  const lastToolResult = (state.conversation?.lastToolResult ?? {}) as {
+    matchedRegion?: string;
+    matchedServiceName?: string;
+    matchedCategory?: string;
+  };
 
   if (toolName === "diagnose_connectivity") {
     return {
@@ -34,8 +39,8 @@ function buildRequest(state: SessionState, toolName: ToolName): ToolRequestByNam
   }
 
   if (toolName === "check_outage_status") {
-    const regionOrService = entities.serviceNameOrRegion ?? slots.serviceNameOrRegion ?? slots.postcode;
-    const category = entities.serviceCategory ?? slots.serviceCategory;
+    const regionOrService = entities.serviceNameOrRegion ?? slots.serviceNameOrRegion ?? slots.postcode ?? lastToolResult.matchedRegion ?? lastToolResult.matchedServiceName;
+    const category = entities.serviceCategory ?? slots.serviceCategory ?? lastToolResult.matchedCategory;
     return {
       serviceNameOrRegion: [regionOrService, category].filter(Boolean).join(" ").trim() || undefined,
       active: true
