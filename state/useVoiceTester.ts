@@ -42,7 +42,6 @@ export function useVoiceTester() {
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
   const hasMicrophonePermission = useRef(false);
-  const hasStartedVoiceLoop = useRef(false);
   const conversationStatusRef = useRef<TurnStatus>("idle");
   const { config, setConfig, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
   const runtimeConfig = config.toolConfig;
@@ -373,12 +372,11 @@ export function useVoiceTester() {
 
   useEffect(() => {
     if (!voiceModeEnabled) {
-      hasStartedVoiceLoop.current = false;
       stopMicrophoneCapture();
       return;
     }
 
-    if (!hasStartedVoiceLoop.current || isProcessing || sttState.isListening || capturePromise.current) {
+    if (isProcessing || sttState.isListening || capturePromise.current) {
       return;
     }
 
