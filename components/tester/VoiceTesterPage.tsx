@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
 import { ToolName } from "@/tools/toolTypes";
@@ -9,7 +9,23 @@ import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
 import { IntentUnderstandingMode, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
 
 function StatusPill({ label, active }: { label: string; active: boolean }) {
-  return <span className={cn("rounded-full px-2 py-1 text-xs", active ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500")}>{label}</span>;
+  return (
+    <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", active ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-500")}>
+      {label}
+    </span>
+  );
+}
+
+function SectionCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        {description && <p className="text-xs text-slate-500">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 function formatMs(value?: number) {
@@ -22,7 +38,14 @@ function MessageBubble({ message, preToolUsed }: { message: TesterMessage; preTo
 
   return (
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-      <div className={cn("max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm", isUser && "bg-blue-600 text-white", !isUser && !isSystem && "bg-white text-slate-900 border border-slate-200", isSystem && "bg-amber-50 text-amber-900 border border-amber-200")}>
+      <div
+        className={cn(
+          "max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm",
+          isUser && "bg-blue-600 text-white",
+          !isUser && !isSystem && "border border-slate-200 bg-white text-slate-900",
+          isSystem && "border border-amber-200 bg-amber-50 text-amber-900"
+        )}
+      >
         <p>{message.text}</p>
         {!isUser && preToolUsed && <p className="mt-2 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">Used pre-tool LLM</p>}
       </div>
@@ -41,8 +64,8 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
   ] as const;
 
   return (
-    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 text-xs">
-      <div className="flex items-end justify-between">
+    <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 text-xs">
+      <div className="flex items-end justify-between gap-2">
         <div>
           <p className="text-slate-600">Time to first audio (TTFA)</p>
           <p className="text-lg font-semibold text-blue-800">{formatMs(latency?.ttfaMs)}</p>
@@ -55,7 +78,7 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
       <p className="mt-1 text-slate-500">Provider mode: {providerMode ?? "-"}</p>
       <div className="mt-2 grid grid-cols-1 gap-1 text-slate-700 sm:grid-cols-2">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex justify-between gap-2 rounded bg-white px-2 py-1">
+          <div key={label} className="flex justify-between gap-2 rounded bg-white/90 px-2 py-1">
             <span>{label}</span>
             <strong>{value}</strong>
           </div>
@@ -65,17 +88,12 @@ function LatencyPanel({ latency, providerMode }: { latency?: TesterLatencyMetric
   );
 }
 
-
 function intentModeLabel(mode: IntentUnderstandingMode | undefined) {
   return mode === "llm_assisted" ? "LLM-assisted" : "Deterministic";
 }
 
 function responseModeLabel(mode: PostToolResponseMode | undefined) {
   return mode === "llm_generated" ? "LLM-generated" : "Deterministic";
-}
-
-function yesNo(value?: boolean) {
-  return value ? "yes" : "no";
 }
 
 function renderPreToolReason(latestTurn: ReturnType<typeof useVoiceTester>["latestTurn"]) {
@@ -135,55 +153,40 @@ export function VoiceTesterPage() {
     await runTurn(value, "text");
   };
 
+  const summaryRows = [
+    ["Input mode", latestTurn?.metadata.intentUnderstandingMode ?? "-"],
+    ["Support intent", latestTurn?.metadata.supportIntent ?? "none"],
+    ["Routing", latestTurn?.metadata.routingDecision ?? "-"],
+    ["Tool selected", latestTurn?.metadata.toolCalled ?? "none"],
+    ["Tool mode", latestTurn?.metadata.toolCalled ? resolveToolMode(latestTurn.metadata.toolCalled as ToolName) : "-"],
+    ["Clarification", latestTurn?.metadata.clarificationReason ?? "none"],
+    ["Pre-tool decision", renderPreToolReason(latestTurn)]
+  ] as const;
+
   return (
-    <main className="grid gap-4 lg:grid-cols-[1fr_380px]">
-      <section className="flex min-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50">
-        <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div>
-            <h1 className="text-lg font-semibold">Voice Testing UI</h1>
-            <p className="text-xs text-slate-500">This demo supports live service status and announcement queries.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", globalMode === "api" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{globalMode === "api" ? "Live API mode" : "Mock mode"}</span>
-            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.intentUnderstandingMode === "llm_assisted" ? "bg-violet-100 text-violet-700" : "bg-slate-200 text-slate-700")}>Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
-            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.postToolResponseMode === "llm_generated" ? "bg-indigo-100 text-indigo-700" : "bg-slate-200 text-slate-700")}>Response: {responseModeLabel(dashboardConfig.postToolResponseMode)}</span>
-            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", dashboardConfig.troubleshootingKbMode === "on" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700")}>Troubleshooting KB: {dashboardConfig.troubleshootingKbMode}</span>
-            <select
-              className="rounded-full border border-violet-300 bg-white px-2 py-1 text-xs font-medium text-violet-800"
-              value={dashboardConfig.intentUnderstandingMode}
-              onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}
-              aria-label="Intent understanding mode"
-            >
-              <option value="deterministic">Deterministic</option>
-              <option value="llm_assisted">LLM-assisted</option>
-            </select>
-            <select
-              className="rounded-full border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-800"
-              value={dashboardConfig.postToolResponseMode}
-              onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}
-              aria-label="Post-tool response mode"
-            >
-              <option value="deterministic">Deterministic</option>
-              <option value="llm_generated">LLM-generated</option>
-            </select>
-            <select
-              className="rounded-full border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
-              value={dashboardConfig.troubleshootingKbMode}
-              onChange={(e) => setDashboardConfig((prev) => ({ ...prev, troubleshootingKbMode: e.target.value as "off" | "on" }))}
-              aria-label="Troubleshooting KB mode"
-            >
-              <option value="on">KB on</option>
-              <option value="off">KB off</option>
-            </select>
+    <main className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
+      <section className="flex min-h-[78vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-semibold text-slate-900">Voice Console</h1>
+              <p className="text-xs text-slate-600">Test voice turns, tune runtime behavior, and inspect pipeline diagnostics in one place.</p>
+            </div>
             <StatusPill label={statusText} active={status !== "idle"} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-medium text-violet-800">Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
+            <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">Response: {responseModeLabel(dashboardConfig.postToolResponseMode)}</span>
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">KB: {dashboardConfig.troubleshootingKbMode}</span>
+            <span className={cn("rounded-full px-2 py-1 text-xs font-medium", globalMode === "default" ? "bg-slate-200 text-slate-700" : "bg-cyan-100 text-cyan-800")}>Tools: {globalMode === "default" ? "Code defaults" : globalMode.toUpperCase()}</span>
           </div>
         </header>
 
-        <div className="space-y-3 border-b border-slate-200 px-4 py-3">
+        <div className="border-b border-slate-200 px-4 py-3">
           <LatencyPanel latency={latestTurn?.metadata.latency} providerMode={latestTurn?.metadata.providerMode} />
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/60 px-4 py-4">
           {empty && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Try: “Is there an outage?”, “Is FTTH in Berlin down?”, “Any upcoming announcements?”, or “I want to speak to a human.”</div>}
           {conversation.messages.map((message) => {
             const turn = message.turnId ? conversation.turns.find((item) => item.id === message.turnId) : undefined;
@@ -202,13 +205,13 @@ export function VoiceTesterPage() {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <button type="button" disabled={isProcessing || status === "listening"} onClick={startListening} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">🎙 Talk</button>
-            <button type="button" disabled={status !== "listening"} onClick={stopListening} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40">Cancel / Stop (debug)</button>
-            <button type="button" onClick={() => setVoiceModeEnabled((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Voice mode: {voiceModeEnabled ? "On" : "Off"}</button>
-            <button type="button" onClick={replayLastAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs" disabled={!latestTurn}>Replay audio</button>
-            <button type="button" onClick={stopAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Stop audio</button>
-            <button type="button" onClick={resetConversation} className="rounded-lg border border-rose-200 px-3 py-2 text-xs text-rose-700">Reset conversation</button>
+            <button type="button" disabled={status !== "listening"} onClick={stopListening} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40">Stop</button>
+            <button type="button" onClick={() => setVoiceModeEnabled((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Voice: {voiceModeEnabled ? "On" : "Off"}</button>
+            <button type="button" onClick={replayLastAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs" disabled={!latestTurn}>Replay</button>
+            <button type="button" onClick={stopAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Mute</button>
+            <button type="button" onClick={resetConversation} className="rounded-lg border border-rose-200 px-3 py-2 text-xs text-rose-700">Reset</button>
           </div>
 
           <div className="flex gap-2">
@@ -219,181 +222,98 @@ export function VoiceTesterPage() {
         </form>
       </section>
 
-      <aside className="rounded-2xl border border-slate-200 bg-white">
-        <button className="flex w-full items-center justify-between border-b border-slate-200 px-4 py-3 text-sm font-medium" onClick={() => setIsDebugOpen((v) => !v)}>
-          Debug panel
-          <span>{isDebugOpen ? "Hide" : "Show"}</span>
-        </button>
-        {isDebugOpen && (
-          <div className="space-y-3 p-4 text-xs text-slate-700">
-            <div className="rounded border border-violet-200 bg-violet-50 p-2">
-              <p className="font-semibold">Intent understanding mode</p>
-              <div className="mt-2 grid gap-2">
-                <select
-                  className="w-full rounded border border-violet-300 bg-white p-1"
-                  value={dashboardConfig.intentUnderstandingMode}
-                  onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}
-                >
-                  <option value="deterministic">Deterministic</option>
-                  <option value="llm_assisted">LLM-assisted</option>
-                </select>
-                <p className="text-[11px] text-violet-800">Deterministic: lower latency, stricter interpretation. LLM-assisted: higher latency, better natural-language understanding.</p>
-              </div>
-            </div>
-            <div className="rounded border border-indigo-200 bg-indigo-50 p-2">
-              <p className="font-semibold">Post-tool response mode</p>
-              <div className="mt-2 grid gap-2">
-                <select
-                  className="w-full rounded border border-indigo-300 bg-white p-1"
-                  value={dashboardConfig.postToolResponseMode}
-                  onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}
-                >
-                  <option value="deterministic">Deterministic</option>
-                  <option value="llm_generated">LLM-generated</option>
-                </select>
-                <p className="text-[11px] text-indigo-800">Deterministic response: lower latency, more rigid wording. LLM-generated response: higher latency, more natural grounded wording.</p>
-              </div>
-            </div>
-            <div className="rounded border border-slate-200 p-2">
-              <p className="font-semibold">Tool Configuration</p>
-              <label className="mt-2 block">
-                <span className="mb-1 block">Global tool mode</span>
-                <select className="w-full rounded border border-slate-300 p-1" value={globalMode} onChange={(e) => setGlobalToolMode(e.target.value === "default" ? undefined : (e.target.value as "mock" | "api"))}>
-                  <option value="default">Code defaults</option>
-                  <option value="mock">Mock</option>
-                  <option value="api">Live API</option>
-                </select>
-              </label>
-              <details className="mt-2">
-                <summary className="cursor-pointer">Advanced per-tool overrides</summary>
-                <div className="mt-2 space-y-2">
-                  {TOOL_NAMES.map((toolName) => (
-                    <label key={toolName} className="flex items-center justify-between gap-2">
-                      <span>{toolName}</span>
-                      <select value={perToolOverrides.find((item) => item.toolName === toolName)?.mode ?? "default"} onChange={(e) => setToolOverrideMode(toolName as ToolName, e.target.value as "mock" | "api" | "default")} className="rounded border border-slate-300 p-1">
-                        <option value="default">Default</option>
-                        <option value="mock">Mock</option>
-                        <option value="api">API</option>
-                      </select>
-                    </label>
-                  ))}
-                </div>
-              </details>
-              <button type="button" onClick={resetToolSettings} className="mt-2 rounded border border-rose-200 px-2 py-1 text-rose-700">Reset tool settings</button>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-slate-50 p-2">
-              <p className="font-semibold">Turn trace summary</p>
-              <div className="mt-1 space-y-1">
-                <div><strong>Input mode used:</strong> {latestTurn?.metadata.intentUnderstandingMode ?? "-"}</div>
-                <div><strong>Parsed support intent:</strong> {latestTurn?.metadata.supportIntent ?? "none"}</div>
-                <div><strong>Parsed entities:</strong> <pre className="mt-1 overflow-x-auto rounded bg-white p-2">{JSON.stringify(latestTurn?.metadata.entities ?? {}, null, 2)}</pre></div>
-                <div><strong>Routing outcome:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
-                <div><strong>Tool selected:</strong> {latestTurn?.metadata.toolCalled ?? "none"}</div>
-                <div><strong>Why clarification happened:</strong> {latestTurn?.metadata.clarificationReason ?? latestTurn?.metadata.preToolUsageReason ?? "-"}</div>
-              </div>
-            </div>
-
-            <div><strong>Workflow:</strong> {latestTurn?.metadata.workflowSelected ?? "-"}</div>
-            <div><strong>Support intent:</strong> {latestTurn?.metadata.supportIntent ?? "none"}</div>
-            <div><strong>Active support intent:</strong> {latestTurn?.metadata.activeSupportIntent ?? "-"}</div>
-            <div><strong>Request type:</strong> {latestTurn?.metadata.supportRequestType ?? "-"}</div>
-            <div><strong>preToolUnderstandingUsed:</strong> {yesNo(latestTurn?.metadata.preToolUnderstandingUsed)}</div>
-            <div><strong>intentUnderstandingModeUsed:</strong> {latestTurn?.metadata.intentUnderstandingMode ?? "-"}</div>
-            <div><strong>postToolResponseModeUsed:</strong> {latestTurn?.metadata.postToolResponseModeUsed ?? "-"}</div>
-            <div><strong>postToolLlmUsed:</strong> {yesNo(latestTurn?.metadata.postToolLlmUsed)}</div>
-            <div><strong>responseGenerationSource:</strong> {latestTurn?.metadata.responseGenerationSource ?? "-"}</div>
-            <div><strong>postToolProvider:</strong> {latestTurn?.metadata.postToolProvider ?? "-"}</div>
-            <div><strong>postToolModel:</strong> {latestTurn?.metadata.postToolModel ?? "-"}</div>
-            <div><strong>responseGenerationLatencyMs:</strong> {formatMs(latestTurn?.metadata.responseGenerationLatencyMs)}</div>
-            <div><strong>postToolEndpointType:</strong> {latestTurn?.metadata.postToolEndpointType ?? "-"}</div>
-            <div><strong>postToolFallbackOccurred:</strong> {String(latestTurn?.metadata.postToolFallbackOccurred ?? false)}</div>
-            <div><strong>postToolFailureCategory:</strong> {latestTurn?.metadata.postToolFailureCategory ?? "-"}</div>
-            <div><strong>postToolFailureStatusCode:</strong> {latestTurn?.metadata.postToolFailureStatusCode ?? "-"}</div>
-            <div><strong>postToolRequestPayloadBuilt:</strong> {String(latestTurn?.metadata.postToolRequestPayloadBuilt ?? false)}</div>
-            <div><strong>postToolStructuredSchemaUsed:</strong> {String(latestTurn?.metadata.postToolStructuredSchemaUsed ?? false)}</div>
-            <div><strong>postToolJsonSchemaValidationRequested:</strong> {String(latestTurn?.metadata.postToolJsonSchemaValidationRequested ?? false)}</div>
-            <div><strong>postToolFailureResponseBody:</strong> {latestTurn?.metadata.postToolFailureResponseBody ?? "-"}</div>
-            <div><strong>groundedToolResultUsed:</strong> {yesNo(latestTurn?.metadata.groundedToolResultUsed)}</div>
-            <div><strong>groundedSupportIntent:</strong> {latestTurn?.metadata.groundedSupportIntent ?? "-"}</div>
-            <div><strong>groundedToolName:</strong> {latestTurn?.metadata.groundedToolName ?? "-"}</div>
-            <div><strong>groundedMatchedRegion:</strong> {latestTurn?.metadata.groundedMatchedRegion ?? "-"}</div>
-            <div><strong>groundedMatchedCategory:</strong> {latestTurn?.metadata.groundedMatchedCategory ?? "-"}</div>
-            <div><strong>groundedOverallStatus:</strong> {latestTurn?.metadata.groundedOverallStatus ?? "-"}</div>
-            <div><strong>groundedServiceStatus:</strong> {latestTurn?.metadata.groundedServiceStatus ?? "-"}</div>
-            <div><strong>groundedClarificationNeeded:</strong> {String(latestTurn?.metadata.groundedClarificationNeeded ?? false)}</div>
-            <div><strong>groundedClarificationPrompt:</strong> {latestTurn?.metadata.groundedClarificationPrompt ?? "-"}</div>
-            <div><strong>preToolProvider:</strong> {latestTurn?.metadata.preToolProvider ?? "-"}</div>
-            <div><strong>preToolModel:</strong> {latestTurn?.metadata.preToolModel ?? "-"}</div>
-            <div><strong>preToolProviderSelectionReason:</strong> {latestTurn?.metadata.preToolProviderSelectionReason ?? "-"}</div>
-            <div><strong>preToolEndpointType:</strong> {latestTurn?.metadata.preToolEndpointType ?? "-"}</div>
-            <div><strong>preToolFallbackOccurred:</strong> {String(latestTurn?.metadata.preToolFallbackOccurred ?? false)}</div>
-            <div><strong>preToolFailureCategory:</strong> {latestTurn?.metadata.preToolFailureCategory ?? "-"}</div>
-            <div><strong>preToolFailureStatusCode:</strong> {latestTurn?.metadata.preToolFailureStatusCode ?? "-"}</div>
-            <div><strong>preToolRequestPayloadBuilt:</strong> {String(latestTurn?.metadata.preToolRequestPayloadBuilt ?? false)}</div>
-            <div><strong>preToolStructuredSchemaUsed:</strong> {String(latestTurn?.metadata.preToolStructuredSchemaUsed ?? false)}</div>
-            <div><strong>preToolJsonSchemaValidationRequested:</strong> {String(latestTurn?.metadata.preToolJsonSchemaValidationRequested ?? false)}</div>
-            <div><strong>preToolFailureResponseBody:</strong> {latestTurn?.metadata.preToolFailureResponseBody ?? "-"}</div>
-            <div><strong>preToolLatencyMs:</strong> {formatMs(latestTurn?.metadata.preToolLatencyMs)}</div>
-            <div><strong>inferredSupportIntent:</strong> {latestTurn?.metadata.preToolInferredSupportIntent ?? "-"}</div>
-            <div><strong>intentConfidence:</strong> {latestTurn?.metadata.preToolIntentConfidence ?? "-"}</div>
-            <div><strong>turnAct:</strong> {latestTurn?.metadata.preToolTurnAct ?? latestTurn?.metadata.turnAct ?? "-"}</div>
-            <div><strong>clarificationNeeded:</strong> {String(latestTurn?.metadata.preToolClarificationNeeded ?? false)}</div>
-            <div><strong>clarificationQuestion:</strong> {latestTurn?.metadata.preToolClarificationQuestion ?? "-"}</div>
-            <div><strong>continuationDetected:</strong> {String(latestTurn?.metadata.preToolContinuationDetected ?? latestTurn?.metadata.continuationDetected ?? false)}</div>
-            <div><strong>correctionDetected:</strong> {String(latestTurn?.metadata.preToolCorrectionDetected ?? false)}</div>
-            <div><strong>Pre-tool decision:</strong> {renderPreToolReason(latestTurn)}</div>
-            <div><strong>rescueMappingApplied:</strong> {String(latestTurn?.metadata.preToolRescueMappingApplied ?? false)}</div>
-            <div><strong>Continuation detected:</strong> {String(latestTurn?.metadata.continuationDetected ?? false)}</div>
-            <div><strong>Corrected slots:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.correctedSlots ?? {}, null, 2)}</pre></div>
-            <div><strong>Support intent transition:</strong> {latestTurn?.metadata.supportIntentTransition ?? "-"}</div>
-            <div><strong>Troubleshooting active:</strong> {String(latestTurn?.metadata.troubleshootingActive ?? false)}</div>
-            <div><strong>Troubleshooting mode:</strong> {latestTurn?.metadata.troubleshootingMode ?? "-"}</div>
-            <div><strong>KB source:</strong> {latestTurn?.metadata.troubleshootingKbSource ?? "-"}</div>
-            <div><strong>Selected KB sections:</strong> {latestTurn?.metadata.troubleshootingSelectedKBSections?.join(", ") ?? "-"}</div>
-            <div><strong>Current troubleshooting step:</strong> {latestTurn?.metadata.troubleshootingCurrentStep ?? "-"}</div>
-            <div><strong>Steps shown:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.troubleshootingStepsShown ?? [], null, 2)}</pre></div>
-            <div><strong>Troubleshooting resolution status:</strong> {latestTurn?.metadata.troubleshootingResolutionStatus ?? "-"}</div>
-            <div><strong>Previous tool context:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.previousToolContext ?? {}, null, 2)}</pre></div>
-            <div><strong>Out-of-scope demo request:</strong> {String(latestTurn?.metadata.outOfScopeDemoRequest ?? false)}</div>
-            <div><strong>Routing decision:</strong> {latestTurn?.metadata.routingDecision ?? "-"}</div>
-            <div><strong>Required slots:</strong> {(latestTurn?.metadata.requiredSlots ?? []).join(", ") || "-"}</div>
-            <div><strong>Missing slots:</strong> {(latestTurn?.metadata.missingSlots ?? []).join(", ") || "-"}</div>
-            <div><strong>Pending question:</strong> {latestTurn?.metadata.pendingQuestion?.prompt ?? "-"}</div>
-            <div><strong>Tool clarification needed:</strong> {String(latestTurn?.metadata.toolClarificationNeeded ?? false)}</div>
-            <div><strong>Tool clarification reason:</strong> {latestTurn?.metadata.clarificationReason ?? "-"}</div>
-            <div><strong>Expected slot from tool:</strong> {latestTurn?.metadata.expectedSlotFromTool ?? "-"}</div>
-            <div><strong>Candidate categories:</strong> {(latestTurn?.metadata.candidateCategories ?? []).join(", ") || "-"}</div>
-            <div><strong>Pending question prompt:</strong> {latestTurn?.metadata.pendingQuestionPrompt ?? "-"}</div>
-            <div><strong>Last unresolved tool context:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.lastUnresolvedToolContext ?? {}, null, 2)}</pre></div>
-            <div><strong>Tool blocked (missing slot):</strong> {String(latestTurn?.metadata.toolExecutionBlockedDueToMissingSlot ?? false)}</div>
-            <div><strong>Region extracted:</strong> {latestTurn?.metadata.regionExtracted ?? "-"}</div>
-            <div><strong>Tool called:</strong> {latestTurn?.metadata.toolCalled ?? "-"}</div>
-            <div><strong>Resolved mode:</strong> {latestTurn?.metadata.toolCalled ? resolveToolMode(latestTurn.metadata.toolCalled as ToolName) : "-"}</div>
-            <div><strong>Tool execution mode:</strong> {latestTurn?.metadata.toolExecutionMode ?? "-"}</div>
-            <div><strong>Fallback activated:</strong> {String(latestTurn?.metadata.fallbackActivated ?? false)}</div>
-            <div><strong>Endpoint:</strong> {latestTurn?.metadata.toolEndpoint ?? "-"}</div>
-            <div><strong>Request payload:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.toolRequestPayload ?? {}, null, 2)}</pre></div>
-            <div><strong>Raw response:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.rawToolResponse ?? {}, null, 2)}</pre></div>
-            <div><strong>Normalized result:</strong> <pre className="mt-1 overflow-x-auto rounded bg-slate-50 p-2">{JSON.stringify(latestTurn?.metadata.normalizedToolResult ?? {}, null, 2)}</pre></div>
-            <div><strong>Execution latency:</strong> {formatMs(latestTurn?.session.toolExecution?.executionTimeMs)}</div>
-            <div><strong>Fallback behavior:</strong> {latestTurn?.session.toolExecution?.fallbackBehavior ?? "-"}</div>
-
-            <div className="rounded border border-slate-200 p-2">
-              <p className="font-semibold">Recent tool calls</p>
-              <div className="mt-2 max-h-40 overflow-auto">
-                {toolHistory.map((entry) => (
-                  <div key={entry.id} className="mb-2 rounded border border-slate-100 p-1">
-                    <div>#{entry.turnNumber} {new Date(entry.timestamp).toLocaleTimeString()}</div>
-                    <div>{entry.toolName} • {entry.mode} • {entry.status} • {formatMs(entry.latencyMs)}</div>
-                    <div className="text-slate-500">{entry.summary}</div>
-                  </div>
+      <aside className="space-y-3">
+        <SectionCard title="Configuration" description="All runtime toggles are grouped here for quick tuning.">
+          <div className="space-y-3 text-xs">
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Intent understanding</span>
+              <select className="w-full rounded-lg border border-violet-300 bg-white p-2" value={dashboardConfig.intentUnderstandingMode} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}>
+                <option value="deterministic">Deterministic</option>
+                <option value="llm_assisted">LLM-assisted</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Post-tool response</span>
+              <select className="w-full rounded-lg border border-indigo-300 bg-white p-2" value={dashboardConfig.postToolResponseMode} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}>
+                <option value="deterministic">Deterministic</option>
+                <option value="llm_generated">LLM-generated</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Troubleshooting KB</span>
+              <select className="w-full rounded-lg border border-amber-300 bg-white p-2" value={dashboardConfig.troubleshootingKbMode} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, troubleshootingKbMode: e.target.value as "off" | "on" }))}>
+                <option value="on">On</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Global tool mode</span>
+              <select className="w-full rounded-lg border border-slate-300 bg-white p-2" value={globalMode} onChange={(e) => setGlobalToolMode(e.target.value === "default" ? undefined : (e.target.value as "mock" | "api"))}>
+                <option value="default">Code defaults</option>
+                <option value="mock">Mock</option>
+                <option value="api">Live API</option>
+              </select>
+            </label>
+            <details className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <summary className="cursor-pointer font-medium text-slate-700">Per-tool overrides</summary>
+              <div className="mt-2 space-y-2">
+                {TOOL_NAMES.map((toolName) => (
+                  <label key={toolName} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{toolName}</span>
+                    <select value={perToolOverrides.find((item) => item.toolName === toolName)?.mode ?? "default"} onChange={(e) => setToolOverrideMode(toolName as ToolName, e.target.value as "mock" | "api" | "default")} className="rounded border border-slate-300 bg-white p-1">
+                      <option value="default">Default</option>
+                      <option value="mock">Mock</option>
+                      <option value="api">API</option>
+                    </select>
+                  </label>
                 ))}
-                {toolHistory.length === 0 && <div className="text-slate-500">No tool calls yet.</div>}
               </div>
+            </details>
+            <button type="button" onClick={resetToolSettings} className="w-full rounded-lg border border-rose-200 px-2 py-2 text-rose-700">Reset tool settings</button>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Turn summary" description="Key routing information from the latest turn.">
+          <div className="space-y-2 text-xs">
+            {summaryRows.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-3 rounded-lg bg-slate-50 px-2 py-1.5">
+                <span className="text-slate-500">{label}</span>
+                <span className="max-w-[60%] truncate text-right font-medium text-slate-800">{value}</span>
+              </div>
+            ))}
+            <div>
+              <p className="mb-1 text-slate-500">Entities</p>
+              <pre className="overflow-x-auto rounded-lg bg-slate-900 p-2 text-[11px] text-slate-100">{JSON.stringify(latestTurn?.metadata.entities ?? {}, null, 2)}</pre>
             </div>
           </div>
-        )}
+        </SectionCard>
+
+        <SectionCard title="Debug panel" description="Deep diagnostics and full metadata payload.">
+          <button className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium" onClick={() => setIsDebugOpen((v) => !v)}>
+            {isDebugOpen ? "Hide" : "Show"} debug details
+          </button>
+          {isDebugOpen && (
+            <div className="space-y-3 text-xs">
+              <div>
+                <p className="mb-1 font-medium text-slate-700">Latest turn metadata</p>
+                <pre className="max-h-60 overflow-auto rounded-lg bg-slate-900 p-2 text-[11px] text-slate-100">{JSON.stringify(latestTurn?.metadata ?? {}, null, 2)}</pre>
+              </div>
+              <div>
+                <p className="mb-1 font-medium text-slate-700">Recent tool calls</p>
+                <div className="max-h-40 space-y-2 overflow-auto">
+                  {toolHistory.map((entry) => (
+                    <div key={entry.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <div className="font-medium">#{entry.turnNumber} · {new Date(entry.timestamp).toLocaleTimeString()}</div>
+                      <div>{entry.toolName} • {entry.mode} • {entry.status} • {formatMs(entry.latencyMs)}</div>
+                      <div className="text-slate-500">{entry.summary}</div>
+                    </div>
+                  ))}
+                  {toolHistory.length === 0 && <div className="text-slate-500">No tool calls yet.</div>}
+                </div>
+              </div>
+            </div>
+          )}
+        </SectionCard>
       </aside>
     </main>
   );
