@@ -156,6 +156,7 @@ export interface PreToolUnderstandingDiagnostics {
 export interface ResponseGenerationContext {
   supportIntent: "service_status" | "announcements" | "troubleshooting" | "none";
   postToolResponseMode: "deterministic" | "llm_generated";
+  initialUserQuestion?: string;
   originalUtterance: string;
   sentiment?: string;
   empathyNeeded: boolean;
