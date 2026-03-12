@@ -146,6 +146,24 @@ export function buildTroubleshootingResponse(input: {
   }
 
   const suspectedSymptoms = extractSuspectedSymptoms(input.utterance, input.preTool);
+  if (!input.previous?.active && suspectedSymptoms.length === 0) {
+    return {
+      state: {
+        active: true,
+        issueType: input.previous?.issueType,
+        suspectedSymptoms,
+        selectedKBSections: input.previous?.selectedKBSections ?? [],
+        currentStepIndex: 0,
+        stepsShown: input.previous?.stepsShown ?? [],
+        resolutionStatus: "in_progress",
+        kbSource: input.kb.source
+      },
+      responseText:
+        "Okay — the wider service looks normal. Before we run steps, what do you see on the router right now: no lights, red/blinking internet light, or normal lights but no internet?",
+      resolutionDetection
+    };
+  }
+
   const ranked = rankSectionsBySymptoms({ kb: input.kb, utterance: input.utterance, suspectedSymptoms });
   const selectedSections = ranked.length ? ranked.slice(0, 2) : input.kb.sections.slice(0, 1);
   const rankedSectionIds = selectedSections.map((section) => section.id);
@@ -160,7 +178,8 @@ export function buildTroubleshootingResponse(input: {
     .filter((section): section is NonNullable<typeof section> => Boolean(section))
     .flatMap((section) => section.steps.map((step) => `${section.title}: ${step}`));
 
-  const currentStepIndex = shouldResetProgress ? 0 : input.previous ? input.previous.currentStepIndex + 1 : 0;
+  const previousHadShownStep = Boolean(input.previous?.stepsShown?.length);
+  const currentStepIndex = shouldResetProgress ? 0 : previousHadShownStep ? (input.previous?.currentStepIndex ?? 0) + 1 : 0;
   const step = steps[currentStepIndex];
   const stepsShown = shouldResetProgress ? (step ? [step] : []) : [...(input.previous?.stepsShown ?? []), ...(step ? [step] : [])];
 
