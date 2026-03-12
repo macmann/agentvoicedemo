@@ -3,6 +3,7 @@ import { PendingQuestionState, PendingWorkflowState, SessionState } from "@/type
 
 const REGION_WORD_HINTS = ["city", "region", "area", "district", "downtown", "uptown", "east", "west", "north", "south"];
 const NON_REGION_PHRASES = ["my home", "at home", "home", "internet", "service", "status", "current status", "outage", "check service status"];
+const NON_REGION_WORDS = ["internet", "service", "status", "outage", "working", "broken", "issue", "problem", "router", "modem", "wifi", "connection", "check", "still", "not"];
 const KNOWN_REGIONS = ["berlin", "munich", "downtown", "uptown"];
 const POSTCODE_REGEX = /\b([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{5})\b/i;
 const ISO_DATE_REGEX = /\b(\d{4}-\d{2}-\d{2})\b/;
@@ -92,6 +93,16 @@ function normalizeDeviceScopeSlot(utterance: string): SlotResolutionResult {
   return { matched: false, confidence: "low", reason: "no_match" };
 }
 
+function isLikelyRegionCandidate(value: string): boolean {
+  const lowered = value.toLowerCase().trim();
+  if (!lowered) return false;
+  if (NON_REGION_PHRASES.some((phrase) => lowered === phrase || lowered.includes(`${phrase} status`))) return false;
+  const words = lowered.split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > 3) return false;
+  if (words.some((word) => NON_REGION_WORDS.includes(word))) return false;
+  return true;
+}
+
 function normalizeRegionLikeValue(raw: string): string | undefined {
   const cleaned = raw
     .replace(/[?.!,]+$/g, "")
@@ -99,8 +110,7 @@ function normalizeRegionLikeValue(raw: string): string | undefined {
     .trim();
   if (!cleaned) return undefined;
 
-  const lowered = cleaned.toLowerCase();
-  if (NON_REGION_PHRASES.some((phrase) => lowered === phrase || lowered.includes(`${phrase} status`))) return undefined;
+  if (!isLikelyRegionCandidate(cleaned)) return undefined;
   if (cleaned.length > 40) return undefined;
 
   return cleaned
@@ -158,7 +168,7 @@ function extractServiceRegionValue(utterance: string): string | undefined {
 
   if (/^(?:no,?\s+|yeah,?\s+)?[a-z][a-z\s-]{1,30}$/i.test(lowered)) {
     const bare = lowered.replace(/^(?:no,?\s+|yeah,?\s+)?/, "").trim();
-    if (bare && bare.split(/\s+/).length <= 3) {
+    if (isLikelyRegionCandidate(bare) && bare.split(/\s+/).length <= 3) {
       return normalizeRegionLikeValue(bare);
     }
   }
@@ -283,6 +293,7 @@ export function deriveConversationState(input: {
     lastToolResult: input.toolResult ?? input.previous?.lastToolResult,
     lastHandoffState: input.handoff ?? input.previous?.lastHandoffState,
     fallbackState: input.previous?.fallbackState,
-    toolClarification: input.previous?.toolClarification
+    toolClarification: input.previous?.toolClarification,
+    troubleshooting: input.previous?.troubleshooting
   };
 }
