@@ -72,7 +72,22 @@ export function detectTroubleshootingResolved(utterance: string): Troubleshootin
 
 export function detectHomeInternetIssue(utterance: string): boolean {
   const lowered = utterance.toLowerCase();
-  const issueTerms = ["internet", "wi-fi", "wifi", "router", "modem", "connection", "offline", "not working", "no internet", "still down"];
+  const issueTerms = [
+    "internet",
+    "wi-fi",
+    "wifi",
+    "router",
+    "modem",
+    "connection",
+    "offline",
+    "not working",
+    "no internet",
+    "still down",
+    "troubleshoot",
+    "troubleshooting",
+    "help me troubleshoot",
+    "can you troubleshoot"
+  ];
   return issueTerms.some((token) => lowered.includes(token));
 }
 
