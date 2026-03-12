@@ -3,6 +3,44 @@ import { TtsDiagnostics, TtsSettingsView } from "@/types/session";
 let activeAudio: HTMLAudioElement | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 
+export function isSynthesizedAudioPlaying(): boolean {
+  if (typeof window === "undefined") return false;
+
+  if (activeAudio && !activeAudio.paused && !activeAudio.ended) {
+    return true;
+  }
+
+  if ("speechSynthesis" in window) {
+    return window.speechSynthesis.speaking;
+  }
+
+  return false;
+}
+
+async function resolvePreferredVoice(): Promise<SpeechSynthesisVoice | null> {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+
+  const voicesNow = window.speechSynthesis.getVoices();
+  if (voicesNow.length > 0) {
+    return voicesNow.find((voice) => voice.lang.toLowerCase().startsWith("en") || voice.name.toLowerCase().includes("en")) ?? voicesNow[0] ?? null;
+  }
+
+  return new Promise((resolve) => {
+    const onVoicesChanged = () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+      const loadedVoices = window.speechSynthesis.getVoices();
+      resolve(loadedVoices.find((voice) => voice.lang.toLowerCase().startsWith("en") || voice.name.toLowerCase().includes("en")) ?? loadedVoices[0] ?? null);
+    };
+
+    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged, { once: true });
+    setTimeout(() => {
+      window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+      const fallbackVoices = window.speechSynthesis.getVoices();
+      resolve(fallbackVoices[0] ?? null);
+    }, 400);
+  });
+}
+
 export async function synthesizeSpeechWithMock(text: string, settings: TtsSettingsView): Promise<TtsDiagnostics> {
   return {
     provider: "mock_browser",
@@ -57,6 +95,7 @@ export async function playSynthesizedAudio(tts: TtsDiagnostics): Promise<{ ok: b
 
   if (tts.audioUrl) {
     activeAudio = new Audio(tts.audioUrl);
+    activeAudio.volume = 1;
     try {
       await activeAudio.play();
       const firstAudioMs = Date.now() - playbackStart;
@@ -72,11 +111,34 @@ export async function playSynthesizedAudio(tts: TtsDiagnostics): Promise<{ ok: b
 
   activeUtterance = new SpeechSynthesisUtterance(tts.responseText);
   activeUtterance.rate = tts.settings.speed;
-  const voices = window.speechSynthesis.getVoices();
-  activeUtterance.voice = voices.find((voice) => voice.name.toLowerCase().includes("en")) ?? null;
-  window.speechSynthesis.speak(activeUtterance);
-  const firstAudioMs = Date.now() - playbackStart;
-  return { ok: true, firstAudioMs, completedMs: firstAudioMs };
+  activeUtterance.volume = 1;
+  activeUtterance.pitch = 1;
+  activeUtterance.voice = await resolvePreferredVoice();
+
+  return await new Promise((resolve) => {
+    if (!activeUtterance) {
+      resolve({ ok: false, reason: "Speech utterance unavailable." });
+      return;
+    }
+
+    let firstAudioMs: number | undefined;
+    const onStart = () => {
+      firstAudioMs = Date.now() - playbackStart;
+    };
+    const onEnd = () => {
+      const completedMs = Date.now() - playbackStart;
+      resolve({ ok: true, firstAudioMs: firstAudioMs ?? completedMs, completedMs });
+    };
+    const onError = () => {
+      resolve({ ok: false, reason: "Speech synthesis failed in browser." });
+    };
+
+    activeUtterance.onstart = onStart;
+    activeUtterance.onend = onEnd;
+    activeUtterance.onerror = onError;
+
+    window.speechSynthesis.speak(activeUtterance);
+  });
 }
 
 export function stopSynthesizedAudio() {
