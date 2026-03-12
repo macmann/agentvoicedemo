@@ -65,13 +65,13 @@ export interface TesterDebugState {
   troubleshootingSelectedKBSections?: string[];
   troubleshootingCurrentStep?: string;
   troubleshootingStepsShown?: string[];
-  troubleshootingResolutionStatus?: "in_progress" | "resolved" | "escalate";
+  troubleshootingResolutionStatus?: "in_progress" | "resolved" | "service_visit";
   troubleshootingKbSource?: string;
   troubleshootingMode?: "off" | "on";
   troubleshootingResolutionDetected?: boolean;
   resolutionPhraseMatched?: string;
   resolutionReason?: string;
-  resolutionStatus?: "in_progress" | "resolved" | "escalate";
+  resolutionStatus?: "in_progress" | "resolved" | "service_visit";
   troubleshootingStopped?: boolean;
   handoffCancelledDueToResolution?: boolean;
   preservedSupportContext?: {

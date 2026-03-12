@@ -1,7 +1,17 @@
 import { PreToolUnderstandingResult } from "@/types/session";
 import { TroubleshootingKbDocument, rankSectionsBySymptoms } from "@/orchestration/troubleshootingKb";
 
-export type TroubleshootingResolutionStatus = "in_progress" | "resolved" | "escalate";
+export type TroubleshootingResolutionStatus = "in_progress" | "resolved" | "service_visit";
+
+const SERVICE_VISIT_SLOTS = ["Tomorrow 10am-11am", "Tomorrow 3pm-4pm"] as const;
+
+type ServiceVisitStage = "offered" | "slot_selected" | "confirmed";
+
+interface ServiceVisitState {
+  stage: ServiceVisitStage;
+  availableSlots: string[];
+  selectedSlot?: string;
+}
 
 export interface TroubleshootingState {
   active: boolean;
@@ -14,6 +24,7 @@ export interface TroubleshootingState {
   kbSource?: string;
   escalationSummary?: string;
   resolutionReason?: string;
+  serviceVisit?: ServiceVisitState;
 }
 
 export interface TroubleshootingResolutionDetection {
@@ -145,6 +156,83 @@ export function buildTroubleshootingResponse(input: {
     };
   }
 
+  if (input.previous?.serviceVisit) {
+    const availableSlots = input.previous.serviceVisit.availableSlots?.length ? input.previous.serviceVisit.availableSlots : [...SERVICE_VISIT_SLOTS];
+    const selectedFromUtterance = resolveServiceVisitSlot(input.utterance, availableSlots);
+
+    if (input.previous.serviceVisit.stage === "offered") {
+      if (!selectedFromUtterance) {
+        return {
+          state: {
+            ...input.previous,
+            active: true,
+            kbSource: input.kb.source,
+            resolutionStatus: "service_visit",
+            serviceVisit: { ...input.previous.serviceVisit, stage: "offered", availableSlots }
+          },
+          responseText: `This might require our service team to visit your location. Available slots are ${availableSlots[0]} and ${availableSlots[1]}. Please pick one slot.`,
+          resolutionDetection
+        };
+      }
+
+      return {
+        state: {
+          ...input.previous,
+          active: true,
+          kbSource: input.kb.source,
+          resolutionStatus: "service_visit",
+          serviceVisit: { stage: "slot_selected", availableSlots, selectedSlot: selectedFromUtterance }
+        },
+        responseText: `Great — I can book ${selectedFromUtterance}. Please confirm if I should proceed with this service visit slot.`,
+        resolutionDetection
+      };
+    }
+
+    if (input.previous.serviceVisit.stage === "slot_selected") {
+      const selectedSlot = input.previous.serviceVisit.selectedSlot;
+      if (selectedFromUtterance && selectedFromUtterance !== selectedSlot) {
+        return {
+          state: {
+            ...input.previous,
+            active: true,
+            kbSource: input.kb.source,
+            resolutionStatus: "service_visit",
+            serviceVisit: { stage: "slot_selected", availableSlots, selectedSlot: selectedFromUtterance }
+          },
+          responseText: `Updated — I can book ${selectedFromUtterance}. Please confirm if I should proceed.`,
+          resolutionDetection
+        };
+      }
+
+      if (detectConfirmation(input.utterance)) {
+        return {
+          state: {
+            ...input.previous,
+            active: false,
+            kbSource: input.kb.source,
+            resolutionStatus: "resolved",
+            resolutionReason: "service_visit_booked",
+            serviceVisit: { stage: "confirmed", availableSlots, selectedSlot }
+          },
+          responseText: `Done — your service visit is booked for ${selectedSlot}. You’re all set.`,
+          resolutionDetection
+        };
+      }
+
+      return {
+        state: {
+          ...input.previous,
+          active: true,
+          kbSource: input.kb.source,
+          resolutionStatus: "service_visit",
+          serviceVisit: { stage: "slot_selected", availableSlots, selectedSlot }
+        },
+        responseText: `Please confirm the booking for ${selectedSlot}, or choose another slot: ${availableSlots[0]} or ${availableSlots[1]}.`,
+        resolutionDetection
+      };
+    }
+  }
+
   const suspectedSymptoms = extractSuspectedSymptoms(input.utterance, input.preTool);
   const ranked = rankSectionsBySymptoms({ kb: input.kb, utterance: input.utterance, suspectedSymptoms });
   const selectedSections = ranked.length ? ranked.slice(0, 2) : input.kb.sections.slice(0, 1);
@@ -174,11 +262,15 @@ export function buildTroubleshootingResponse(input: {
         selectedKBSections: mergedSectionIds,
         currentStepIndex,
         stepsShown,
-        resolutionStatus: "escalate",
+        resolutionStatus: "service_visit",
         kbSource: input.kb.source,
-        escalationSummary
+        escalationSummary,
+        serviceVisit: {
+          stage: "offered",
+          availableSlots: [...SERVICE_VISIT_SLOTS]
+        }
       },
-      responseText: "Thanks for trying those steps. I’m escalating this to human support and sharing what we already checked.",
+      responseText: `This might require our service team to visit your location. Available slots are ${SERVICE_VISIT_SLOTS[0]} and ${SERVICE_VISIT_SLOTS[1]}. Please pick one slot.`,
       resolutionDetection
     };
   }
@@ -204,4 +296,21 @@ export function buildTroubleshootingResponse(input: {
     selectedStep: step,
     resolutionDetection
   };
+}
+
+function resolveServiceVisitSlot(utterance: string, availableSlots: string[]): string | undefined {
+  const lowered = utterance.toLowerCase();
+  if (lowered.includes("10") || lowered.includes("10am") || lowered.includes("morning") || lowered.includes("first")) {
+    return availableSlots[0];
+  }
+  if (lowered.includes("3") || lowered.includes("3pm") || lowered.includes("afternoon") || lowered.includes("second")) {
+    return availableSlots[1];
+  }
+
+  return availableSlots.find((slot) => lowered.includes(slot.toLowerCase()));
+}
+
+function detectConfirmation(utterance: string): boolean {
+  const lowered = utterance.toLowerCase();
+  return ["yes", "confirm", "book it", "proceed", "go ahead", "ok", "okay", "sounds good"].some((token) => lowered.includes(token));
 }

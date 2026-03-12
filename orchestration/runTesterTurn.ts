@@ -649,66 +649,58 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
               pendingWorkflow: undefined,
               pendingQuestion: undefined,
               currentStatus:
-                troubleshootingResult.state.resolutionStatus === "escalate"
-                  ? "handoff"
-                  : troubleshootingResult.state.resolutionStatus === "resolved"
-                    ? "processing"
-                    : "processing"
+                troubleshootingResult.state.resolutionStatus === "service_visit"
+                  ? "awaiting_user_input"
+                  : "processing"
             }
           : state.conversation,
         routing: {
           ...(state.routing ?? { decision: "no_workflow", dialogueState: "responding" as const }),
-          decision: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "no_workflow",
+          decision: "no_workflow",
           workflowName: undefined,
           selectedRule:
-            troubleshootingResult.state.resolutionStatus === "escalate"
-              ? "troubleshooting_escalation"
+            troubleshootingResult.state.resolutionStatus === "service_visit"
+              ? "troubleshooting_service_visit"
               : troubleshootingResult.state.resolutionStatus === "resolved"
                 ? "troubleshooting_resolved"
                 : "troubleshooting_flow",
           whyChosen:
             troubleshootingResult.state.resolutionStatus === "resolved"
               ? "User confirmed issue is fixed; troubleshooting flow closed immediately."
-              : "Service is operational and user reports a home-specific issue; running KB-grounded troubleshooting.",
-          handoffReason: troubleshootingResult.state.resolutionStatus === "escalate" ? "troubleshooting_steps_exhausted" : undefined,
-          dialogueState: troubleshootingResult.state.resolutionStatus === "escalate" ? "handoff" : "responding"
+              : troubleshootingResult.state.resolutionStatus === "service_visit"
+                ? "Troubleshooting reached step limit; transitioned to service visit booking flow."
+                : "Service is operational and user reports a home-specific issue; running KB-grounded troubleshooting.",
+          handoffReason: undefined,
+          dialogueState: troubleshootingResult.state.resolutionStatus === "service_visit" ? "awaiting_missing_info" : "responding"
         },
-        handoff: troubleshootingResult.state.resolutionStatus === "escalate"
-          ? {
-              triggered: true,
-              reason: "troubleshooting_steps_exhausted",
-              summary: troubleshootingResult.state.escalationSummary
-            }
-          : troubleshootingResult.state.resolutionStatus === "resolved"
-            ? { triggered: false, reason: "resolved_no_handoff" }
-            : state.handoff
+        handoff: troubleshootingResult.state.resolutionStatus === "resolved"
+          ? { triggered: false, reason: "resolved_no_handoff" }
+          : { triggered: false, reason: "troubleshooting_in_progress" }
       };
 
-      if (troubleshootingResult.state.resolutionStatus !== "escalate") {
-        state = {
-          ...state,
-          toolExecution: undefined,
-          toolResult: undefined,
-          responseText: troubleshootingResult.responseText,
-          responseGeneration: {
-            provider: "mock",
-            model: "troubleshooting-kb-grounded-v1",
-            source: "deterministic_template",
-            toneSettings: ["grounded", "stepwise"],
-            maxResponseLength: 220,
-            structuredContext: buildResponseContext({
-              state,
-              postToolResponseMode,
-              groundedToolResultUsed: true,
-              previousSession: input.previousSession,
-              followupCorrectionTurn: continuation.requestType === "support_task_correction"
-            }),
-            finalResponseText: troubleshootingResult.responseText,
-            guardrailNote: "Troubleshooting response grounded in markdown KB.",
-            fallbackBehavior: "Deterministic troubleshooting branch"
-          }
-        };
-      }
+      state = {
+        ...state,
+        toolExecution: undefined,
+        toolResult: undefined,
+        responseText: troubleshootingResult.responseText,
+        responseGeneration: {
+          provider: "mock",
+          model: "troubleshooting-kb-grounded-v1",
+          source: "deterministic_template",
+          toneSettings: ["grounded", "stepwise"],
+          maxResponseLength: 220,
+          structuredContext: buildResponseContext({
+            state,
+            postToolResponseMode,
+            groundedToolResultUsed: true,
+            previousSession: input.previousSession,
+            followupCorrectionTurn: continuation.requestType === "support_task_correction"
+          }),
+          finalResponseText: troubleshootingResult.responseText,
+          guardrailNote: "Troubleshooting response grounded in markdown KB.",
+          fallbackBehavior: "Deterministic troubleshooting branch"
+        }
+      };
     } catch {
       // If KB loading fails, continue existing flow.
     }

@@ -264,7 +264,7 @@ export interface ConversationState {
     selectedKBSections: string[];
     currentStepIndex: number;
     stepsShown: string[];
-    resolutionStatus: "in_progress" | "resolved" | "escalate";
+    resolutionStatus: "in_progress" | "resolved" | "service_visit";
     kbSource?: string;
     escalationSummary?: string;
   };
