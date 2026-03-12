@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapture } from "@/audio/sttAdapter";
-import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
+import { isSynthesizedAudioPlaying, playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
 import { SessionState } from "@/types/session";
 import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus, VoicePhase } from "@/types/tester";
@@ -42,6 +42,7 @@ export function useVoiceTester() {
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
   const hasMicrophonePermission = useRef(false);
+  const hasStartedVoiceLoop = useRef(false);
   const conversationStatusRef = useRef<TurnStatus>("idle");
   const { config, setConfig, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
   const runtimeConfig = config.toolConfig;
@@ -195,8 +196,9 @@ export function useVoiceTester() {
         });
       }
 
-      setStatus(voiceModeEnabled ? "speaking" : "idle");
-      setPlaybackStatus(voiceModeEnabled ? "playing" : "idle");
+      const ttsPlayed = output.session.tts?.status === "played";
+      setStatus(voiceModeEnabled && ttsPlayed ? "speaking" : "idle");
+      setPlaybackStatus(voiceModeEnabled && ttsPlayed ? "playing" : "unavailable");
     } catch (error) {
       appendMessage({
         id: id("msg"),
@@ -281,7 +283,7 @@ export function useVoiceTester() {
       return;
     }
 
-    if (conversationStatusRef.current === "speaking") {
+    if (isSynthesizedAudioPlaying() || playbackStatus === "playing" || conversationStatusRef.current === "speaking") {
       stopSynthesizedAudio();
       setPlaybackStatus("stopped");
     }
@@ -339,8 +341,10 @@ export function useVoiceTester() {
     }
   };
 
-  const stopListening = async () => {
-    hasStartedVoiceLoop.current = false;
+  const stopListening = async ({ stopVoiceLoop = true }: { stopVoiceLoop?: boolean } = {}) => {
+    if (stopVoiceLoop) {
+      hasStartedVoiceLoop.current = false;
+    }
     if (!capturePromise.current) return;
     stopMicrophoneCapture();
     await finalizeListening({ autoSubmitted: false });
@@ -372,11 +376,15 @@ export function useVoiceTester() {
 
   useEffect(() => {
     if (!voiceModeEnabled) {
-      stopMicrophoneCapture();
+      void stopListening();
       return;
     }
 
-    if (isProcessing || sttState.isListening || capturePromise.current) {
+    if (!hasStartedVoiceLoop.current) {
+      return;
+    }
+
+    if (isProcessing || sttState.isListening || capturePromise.current || isSynthesizedAudioPlaying() || playbackStatus === "playing") {
       return;
     }
 
@@ -385,7 +393,7 @@ export function useVoiceTester() {
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [voiceModeEnabled, isProcessing, sttState.isListening]);
+  }, [voiceModeEnabled, isProcessing, sttState.isListening, playbackStatus]);
 
   const latestTurn = useMemo(() => conversation.turns[conversation.turns.length - 1], [conversation.turns]);
   const toolHistory = useMemo(() => conversation.turns
