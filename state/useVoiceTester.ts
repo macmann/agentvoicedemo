@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapture } from "@/audio/sttAdapter";
 import { playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
@@ -41,6 +41,8 @@ export function useVoiceTester() {
   const capturePromise = useRef<ReturnType<typeof startMicrophoneCapture>["result"] | null>(null);
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
+  const hasMicrophonePermission = useRef(false);
+  const conversationStatusRef = useRef<TurnStatus>("idle");
   const { config, setConfig, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
   const runtimeConfig = config.toolConfig;
   const voiceModeEnabled = config.voiceModeEnabled;
@@ -60,6 +62,10 @@ export function useVoiceTester() {
   };
 
   const setStatus = (status: TurnStatus) => setConversation((prev) => ({ ...prev, status }));
+
+  useEffect(() => {
+    conversationStatusRef.current = conversation.status;
+  }, [conversation.status]);
 
   const upsertDraftMessage = (text: string) => {
     const trimmed = text.trim();
@@ -254,17 +260,29 @@ export function useVoiceTester() {
 
   const startListening = async () => {
     if (isProcessing) return;
-    const permission = await requestMicrophonePermission();
-    if (!permission.granted) {
-      appendMessage({
-        id: id("msg"),
-        role: "system",
-        text: permission.reason ?? "Microphone permission denied.",
-        createdAt: new Date().toISOString(),
-        status: "error"
-      });
-      setStatus("error");
+    if (!hasMicrophonePermission.current) {
+      const permission = await requestMicrophonePermission();
+      if (!permission.granted) {
+        appendMessage({
+          id: id("msg"),
+          role: "system",
+          text: permission.reason ?? "Microphone permission denied.",
+          createdAt: new Date().toISOString(),
+          status: "error"
+        });
+        setStatus("error");
+        return;
+      }
+      hasMicrophonePermission.current = true;
+    }
+
+    if (capturePromise.current) {
       return;
+    }
+
+    if (conversationStatusRef.current === "speaking") {
+      stopSynthesizedAudio();
+      setPlaybackStatus("stopped");
     }
 
     hasSubmittedCapture.current = false;
@@ -289,6 +307,11 @@ export function useVoiceTester() {
         upsertDraftMessage(finalTranscript);
       },
       onSpeechState: ({ isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }) => {
+        if (isSpeechDetected && conversationStatusRef.current === "speaking") {
+          stopSynthesizedAudio();
+          setPlaybackStatus("stopped");
+        }
+
         setSttState((prev) => ({ ...prev, isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }));
       },
       onAutoSubmit: () => {
@@ -309,6 +332,9 @@ export function useVoiceTester() {
         status: "error"
       });
       setStatus("error");
+      if (result.failureType === "permission_denied") {
+        hasMicrophonePermission.current = false;
+      }
     }
   };
 
@@ -340,6 +366,23 @@ export function useVoiceTester() {
     setPlaybackStatus("idle");
     setSttState(initialSttState());
   };
+
+  useEffect(() => {
+    if (!voiceModeEnabled) {
+      stopMicrophoneCapture();
+      return;
+    }
+
+    if (isProcessing || sttState.isListening || capturePromise.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void startListening();
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [voiceModeEnabled, isProcessing, sttState.isListening]);
 
   const latestTurn = useMemo(() => conversation.turns[conversation.turns.length - 1], [conversation.turns]);
   const toolHistory = useMemo(() => conversation.turns
