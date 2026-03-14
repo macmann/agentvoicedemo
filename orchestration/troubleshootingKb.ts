@@ -1,3 +1,6 @@
+import path from "node:path";
+import { readFile } from "node:fs/promises";
+
 export interface TroubleshootingKbSection {
   id: string;
   title: string;
@@ -76,11 +79,21 @@ export async function loadTroubleshootingKb(source?: string): Promise<Troublesho
   const selectedSource = source?.trim() || DEFAULT_KB_PATH;
   if (cachedKb && cachedKb.source === selectedSource) return cachedKb;
 
-  const fetchSource = selectedSource.startsWith("/public/")
-    ? selectedSource.slice("/public".length)
-    : selectedSource;
+  const normalizedSource = selectedSource.replace(/\\/g, "/");
+  const isLocalPath = /^(\/|\.?\.\/|[A-Za-z]:[\\/])/.test(normalizedSource);
+  if (isLocalPath) {
+    const relativeSource = normalizedSource
+      .replace(/^\/public\//, "public/")
+      .replace(/^\/kb\//, "public/kb/")
+      .replace(/^\//, "");
+    const absolutePath = path.resolve(process.cwd(), relativeSource);
+    const markdown = await readFile(absolutePath, "utf8");
+    const parsed = parseTroubleshootingMarkdown(markdown, selectedSource);
+    cachedKb = parsed;
+    return parsed;
+  }
 
-  const response = await fetch(fetchSource, { cache: "no-store" });
+  const response = await fetch(normalizedSource, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Failed to load troubleshooting KB from ${selectedSource} (${response.status}).`);
   }
