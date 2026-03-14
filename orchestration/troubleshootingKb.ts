@@ -12,7 +12,7 @@ export interface TroubleshootingKbDocument {
   sections: TroubleshootingKbSection[];
 }
 
-const DEFAULT_KB_PATH = "/kb/troubleshooting.md";
+const DEFAULT_KB_PATH = "/public/kb/troubleshooting.md";
 
 let cachedKb: TroubleshootingKbDocument | undefined;
 
@@ -76,7 +76,11 @@ export async function loadTroubleshootingKb(source?: string): Promise<Troublesho
   const selectedSource = source?.trim() || DEFAULT_KB_PATH;
   if (cachedKb && cachedKb.source === selectedSource) return cachedKb;
 
-  const response = await fetch(selectedSource, { cache: "no-store" });
+  const fetchSource = selectedSource.startsWith("/public/")
+    ? selectedSource.slice("/public".length)
+    : selectedSource;
+
+  const response = await fetch(fetchSource, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Failed to load troubleshooting KB from ${selectedSource} (${response.status}).`);
   }

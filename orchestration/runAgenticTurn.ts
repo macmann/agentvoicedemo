@@ -39,6 +39,20 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
   let selectedTool: SessionState["toolExecution"] | undefined;
   let toolResult: SessionState["toolResult"] | undefined;
   let kbRetrieveError: string | undefined;
+  let kbToolUsed = false;
+  let kbTroubleshootingMetadata: Pick<
+    TesterDebugState,
+    | "troubleshootingActive"
+    | "troubleshootingIssueType"
+    | "troubleshootingSelectedKBSections"
+    | "troubleshootingCurrentStep"
+    | "troubleshootingStepsShown"
+    | "troubleshootingResolutionStatus"
+    | "troubleshootingKbSource"
+    | "troubleshootingResolutionDetected"
+    | "resolutionPhraseMatched"
+    | "resolutionReason"
+  > | undefined;
 
   const executeTool = async (toolName: "check_outage_status" | "fetch_notifications" | "diagnose_connectivity", payload: Record<string, unknown>) => {
     input.onStage?.("checking_tool");
@@ -61,52 +75,6 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
     return execution.toolResult.status === "success" ? execution.toolResult.result : { error: execution.toolResult.error };
   };
 
-  if (homeInternetIssueDetected && troubleshootingMode === "off") {
-    const responseText = "Troubleshooting KB is currently off, so I can’t provide troubleshooting steps from general knowledge. Please enable the KB mode to continue guided troubleshooting, or I can connect you to a human support agent.";
-    const session: SessionState = {
-      utterance: input.utterance,
-      responseText,
-      conversation: {
-        conversationId: input.previousSession?.conversation?.conversationId ?? crypto.randomUUID(),
-        turns: [
-          ...(input.previousSession?.conversation?.turns ?? []).slice(-20),
-          { id: `turn-${crypto.randomUUID()}`, role: "user", text: transcriptText, createdAt },
-          { id: `turn-${crypto.randomUUID()}`, role: "assistant", text: responseText, createdAt }
-        ],
-        currentStatus: "speaking",
-        pendingSlots: [],
-        collectedSlots: {},
-        activeSupportIntent: "troubleshooting"
-      },
-      latency: {
-        totalTurnMs: Date.now() - start,
-        sttFinalizationMs: 0,
-        responseGenerationMs: 0
-      }
-    };
-
-    return {
-      session,
-      responseText,
-      transcriptText,
-      createdAt,
-      metadata: {
-        orchestrationApproach: "agentic",
-        providerMode: "live",
-        routingDecision: "no_workflow",
-        agenticModel: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
-        agenticToolsAvailable: ["check_outage_status", "fetch_notifications", "diagnose_connectivity"],
-        troubleshootingMode,
-        troubleshootingActive: true,
-        troubleshootingResolutionStatus: "in_progress",
-        troubleshootingKbSource: input.troubleshootingKbSource ?? "/kb/troubleshooting.md",
-        latency: {
-          totalTurnMs: session.latency?.totalTurnMs
-        }
-      }
-    };
-  }
-
   if (homeInternetIssueDetected && troubleshootingMode === "on") {
     try {
       const kb = await loadTroubleshootingKb(input.troubleshootingKbSource);
@@ -117,7 +85,46 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
         maxStepsBeforeEscalation: 4
       });
 
-      const responseText = troubleshootingResult.responseText;
+      kbToolUsed = true;
+      kbTroubleshootingMetadata = {
+        troubleshootingActive: troubleshootingResult.state.active,
+        troubleshootingIssueType: troubleshootingResult.state.issueType,
+        troubleshootingSelectedKBSections: troubleshootingResult.state.selectedKBSections,
+        troubleshootingCurrentStep: troubleshootingResult.state.stepsShown[troubleshootingResult.state.stepsShown.length - 1],
+        troubleshootingStepsShown: troubleshootingResult.state.stepsShown,
+        troubleshootingResolutionStatus: troubleshootingResult.state.resolutionStatus,
+        troubleshootingKbSource: troubleshootingResult.state.kbSource,
+        troubleshootingResolutionDetected: troubleshootingResult.resolutionDetection.resolved,
+        resolutionPhraseMatched: troubleshootingResult.resolutionDetection.resolutionPhraseMatched,
+        resolutionReason: troubleshootingResult.resolutionDetection.resolutionReason
+      };
+
+      const selectedSectionBodies = troubleshootingResult.state.selectedKBSections
+        .map((id) => kb.sections.find((section) => section.id === id))
+        .filter((section): section is NonNullable<typeof section> => Boolean(section))
+        .map((section) => `## ${section.title}\n${section.rawBody}`)
+        .join("\n\n");
+
+      const kbGroundedAgent = new Agent({
+        name: "TroubleshootingKbResponder",
+        model: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
+        instructions:
+          "You are a support responder using only the provided troubleshooting KB excerpt and prior troubleshooting state. Do not invent steps. Ask at most one follow-up question. Keep to 2 short paragraphs max."
+      });
+
+      const kbPrompt = [
+        `User message: ${transcriptText}`,
+        `Troubleshooting state summary: ${troubleshootingResult.responseText}`,
+        `Selected KB source: ${kb.source}`,
+        "KB excerpt:",
+        selectedSectionBodies || "No KB section matched."
+      ].join("\n\n");
+
+      const kbRunResult = await run(kbGroundedAgent, kbPrompt);
+
+      const responseText = typeof kbRunResult.finalOutput === "string" && kbRunResult.finalOutput.trim()
+        ? kbRunResult.finalOutput
+        : troubleshootingResult.responseText;
       const session: SessionState = {
         utterance: input.utterance,
         responseText,
@@ -149,20 +156,12 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
         metadata: {
           orchestrationApproach: "agentic",
           providerMode: "live",
+          toolCalled: "troubleshooting_kb",
           routingDecision: "no_workflow",
           agenticModel: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
           agenticToolsAvailable: ["check_outage_status", "fetch_notifications", "diagnose_connectivity"],
           troubleshootingMode,
-          troubleshootingActive: troubleshootingResult.state.active,
-          troubleshootingIssueType: troubleshootingResult.state.issueType,
-          troubleshootingSelectedKBSections: troubleshootingResult.state.selectedKBSections,
-          troubleshootingCurrentStep: troubleshootingResult.state.stepsShown[troubleshootingResult.state.stepsShown.length - 1],
-          troubleshootingStepsShown: troubleshootingResult.state.stepsShown,
-          troubleshootingResolutionStatus: troubleshootingResult.state.resolutionStatus,
-          troubleshootingKbSource: troubleshootingResult.state.kbSource,
-          troubleshootingResolutionDetected: troubleshootingResult.resolutionDetection.resolved,
-          resolutionPhraseMatched: troubleshootingResult.resolutionDetection.resolutionPhraseMatched,
-          resolutionReason: troubleshootingResult.resolutionDetection.resolutionReason,
+          ...kbTroubleshootingMetadata,
           latency: {
             totalTurnMs: session.latency?.totalTurnMs
           }
@@ -245,14 +244,16 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
       toolCalled: selectedTool?.selectedTool,
       routingDecision: selectedTool ? "workflow" : "no_workflow",
       toolExecutionMode: selectedTool?.executionMode,
-      toolOutput: toolResult?.result,
       agenticModel: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
       agenticToolsAvailable: ["check_outage_status", "fetch_notifications", "diagnose_connectivity"],
       troubleshootingMode,
-      troubleshootingActive: false,
-      troubleshootingKbSource: input.troubleshootingKbSource,
-      troubleshootingResolutionDetected: false,
-      resolutionReason: kbRetrieveError ? `kb_retrieval_failed:${kbRetrieveError}` : undefined,
+      ...kbTroubleshootingMetadata,
+      troubleshootingActive: kbTroubleshootingMetadata?.troubleshootingActive ?? false,
+      troubleshootingKbSource: kbTroubleshootingMetadata?.troubleshootingKbSource ?? input.troubleshootingKbSource,
+      troubleshootingResolutionDetected: kbTroubleshootingMetadata?.troubleshootingResolutionDetected ?? false,
+      resolutionReason: kbTroubleshootingMetadata?.resolutionReason ?? (kbRetrieveError ? `kb_retrieval_failed:${kbRetrieveError}` : undefined),
+      toolOutput: toolResult?.result,
+      groundedToolName: kbToolUsed ? "troubleshooting_kb" : undefined,
       latency: {
         totalTurnMs: session.latency?.totalTurnMs,
         toolExecutionMs: selectedTool?.executionTimeMs
