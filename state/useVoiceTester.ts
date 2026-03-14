@@ -51,6 +51,9 @@ export function useVoiceTester() {
   const hasSubmittedCapture = useRef(false);
   const hasMicrophonePermission = useRef(false);
   const hasStartedVoiceLoop = useRef(false);
+  const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(false);
+  const activeTurnToken = useRef(0);
+  const activeTurnAbortController = useRef<AbortController | null>(null);
   const conversationStatusRef = useRef<TurnStatus>("idle");
   const { config, setConfig, setGlobalToolMode: setGlobalMode, setPerToolMode, resetToolSettings, perToolOverrides, setVoiceModeEnabled } = useDashboardRuntimeConfig();
   const runtimeConfig = config.toolConfig;
@@ -71,6 +74,15 @@ export function useVoiceTester() {
   };
 
   const setStatus = (status: TurnStatus) => setConversation((prev) => ({ ...prev, status }));
+
+  const interruptCurrentWork = () => {
+    activeTurnToken.current += 1;
+    activeTurnAbortController.current?.abort();
+    activeTurnAbortController.current = null;
+    stopSynthesizedAudio();
+    setPlaybackStatus("stopped");
+    setIsProcessing(false);
+  };
 
   useEffect(() => {
     conversationStatusRef.current = conversation.status;
@@ -111,6 +123,8 @@ export function useVoiceTester() {
     if (!text.trim() && source === "text") return;
 
     const startedAt = new Date().toISOString();
+    const turnToken = activeTurnToken.current + 1;
+    activeTurnToken.current = turnToken;
     setIsProcessing(true);
     setStatus("thinking");
 
@@ -127,9 +141,13 @@ export function useVoiceTester() {
     try {
       let announcedToolStage = false;
       const output = config.orchestrationApproach === "agentic"
-        ? await (await fetch("/api/agentic-turn", {
+        ? await (async () => {
+            const controller = new AbortController();
+            activeTurnAbortController.current = controller;
+            const response = await fetch("/api/agentic-turn", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
             body: JSON.stringify({
               utterance: text,
               inputSource: source,
@@ -141,7 +159,9 @@ export function useVoiceTester() {
               troubleshootingKbSource: config.troubleshootingKbSource,
               uploadedTroubleshootingKbs: config.uploadedTroubleshootingKbs
             })
-          })).json()
+            });
+            return response.json();
+          })()
         : await runTesterTurn({
         utterance: text,
         inputSource: source,
@@ -191,6 +211,10 @@ export function useVoiceTester() {
             ttsFirstAudioMs
           }
         };
+      }
+
+      if (turnToken !== activeTurnToken.current) {
+        return;
       }
 
       const turn: TesterTurnRecord = {
@@ -251,6 +275,9 @@ export function useVoiceTester() {
       setStatus(voiceModeEnabled && ttsPlayed ? "speaking" : "idle");
       setPlaybackStatus(voiceModeEnabled && ttsPlayed ? "playing" : "unavailable");
     } catch (error) {
+      if (turnToken !== activeTurnToken.current) {
+        return;
+      }
       appendMessage({
         id: id("msg"),
         role: "system",
@@ -261,8 +288,13 @@ export function useVoiceTester() {
       setStatus("error");
       setPlaybackStatus("unavailable");
     } finally {
-      setIsProcessing(false);
-      setTimeout(() => setStatus("idle"), 600);
+      if (turnToken === activeTurnToken.current) {
+        activeTurnAbortController.current = null;
+        setIsProcessing(false);
+        if (!sttState.isListening) {
+          setStatus("idle");
+        }
+      }
     }
   };
 
@@ -313,7 +345,10 @@ export function useVoiceTester() {
 
   const startListening = async () => {
     hasStartedVoiceLoop.current = true;
-    if (isProcessing) return;
+    setIsVoiceSessionActive(true);
+    if (isProcessing) {
+      interruptCurrentWork();
+    }
     if (!hasMicrophonePermission.current) {
       const permission = await requestMicrophonePermission();
       if (!permission.granted) {
@@ -365,6 +400,9 @@ export function useVoiceTester() {
           stopSynthesizedAudio();
           setPlaybackStatus("stopped");
         }
+        if (isSpeechDetected && isProcessing) {
+          interruptCurrentWork();
+        }
 
         setSttState((prev) => ({ ...prev, isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }));
       },
@@ -393,6 +431,10 @@ export function useVoiceTester() {
   const stopListening = async ({ stopVoiceLoop = true }: { stopVoiceLoop?: boolean } = {}) => {
     if (stopVoiceLoop) {
       hasStartedVoiceLoop.current = false;
+      setIsVoiceSessionActive(false);
+    }
+    if (isProcessing) {
+      interruptCurrentWork();
     }
     if (!capturePromise.current) return;
     stopMicrophoneCapture();
@@ -414,6 +456,8 @@ export function useVoiceTester() {
 
   const resetConversation = () => {
     hasStartedVoiceLoop.current = false;
+    setIsVoiceSessionActive(false);
+    interruptCurrentWork();
     stopSynthesizedAudio();
     stopMicrophoneCapture();
     clearDraftMessage();
@@ -433,7 +477,7 @@ export function useVoiceTester() {
       return;
     }
 
-    if (isProcessing || sttState.isListening || capturePromise.current || isSynthesizedAudioPlaying() || playbackStatus === "playing") {
+    if (sttState.isListening || capturePromise.current) {
       return;
     }
 
@@ -507,6 +551,7 @@ export function useVoiceTester() {
     conversation,
     latestTurn,
     voiceModeEnabled,
+    isVoiceSessionActive,
     setVoiceModeEnabled,
     isProcessing,
     isDebugOpen,
