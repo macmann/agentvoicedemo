@@ -442,19 +442,58 @@ export function useVoiceTester() {
 
   const latestTurn = useMemo(() => conversation.turns[conversation.turns.length - 1], [conversation.turns]);
   const toolHistory = useMemo(() => conversation.turns
-    .filter((turn) => Boolean(turn.session.toolExecution?.selectedTool))
+    .flatMap((turn, index) => {
+      const entries: Array<{
+        id: string;
+        turnNumber: number;
+        timestamp: string;
+        toolName?: string;
+        mode?: string;
+        status?: string;
+        latencyMs?: number;
+        summary: string;
+      }> = [];
+
+      if (turn.session.toolExecution?.selectedTool) {
+        entries.push({
+          id: turn.id,
+          turnNumber: index + 1,
+          timestamp: turn.createdAt,
+          toolName: turn.session.toolExecution?.selectedTool,
+          mode: turn.session.toolExecution?.executionMode,
+          status: turn.session.toolExecution?.executionStatus,
+          latencyMs: turn.session.toolExecution?.executionTimeMs,
+          summary: turn.session.toolExecution?.errorMessage ?? (turn.session.toolExecution?.executionStatus === "success" ? "Tool executed successfully" : "-")
+        });
+      }
+
+      const kbSections = turn.metadata.troubleshootingSelectedKBSections ?? [];
+      const kbUsed = (turn.metadata.troubleshootingActive || kbSections.length > 0) && turn.metadata.troubleshootingMode !== "off";
+
+      if (kbUsed) {
+        const latestStep = turn.metadata.troubleshootingCurrentStep ?? turn.metadata.troubleshootingStepsShown?.[turn.metadata.troubleshootingStepsShown.length - 1];
+        const kbSummaryParts = [
+          `KB source: ${turn.metadata.troubleshootingKbSource ?? "-"}`,
+          kbSections.length ? `Retrieved sections: ${kbSections.join(", ")}` : "Retrieved sections: -",
+          latestStep ? `Step shown: ${latestStep}` : "Step shown: -"
+        ];
+
+        entries.push({
+          id: `${turn.id}-kb`,
+          turnNumber: index + 1,
+          timestamp: turn.createdAt,
+          toolName: "troubleshooting_kb",
+          mode: "kb",
+          status: turn.metadata.troubleshootingResolutionStatus === "resolved" ? "resolved" : "used",
+          latencyMs: undefined,
+          summary: kbSummaryParts.join(" • ")
+        });
+      }
+
+      return entries;
+    })
     .slice(-12)
-    .reverse()
-    .map((turn, index) => ({
-      id: turn.id,
-      turnNumber: conversation.turns.length - index,
-      timestamp: turn.createdAt,
-      toolName: turn.session.toolExecution?.selectedTool,
-      mode: turn.session.toolExecution?.executionMode,
-      status: turn.session.toolExecution?.executionStatus,
-      latencyMs: turn.session.toolExecution?.executionTimeMs,
-      summary: turn.session.toolExecution?.errorMessage ?? (turn.session.toolExecution?.executionStatus === "success" ? "Tool executed successfully" : "-")
-    })), [conversation.turns]);
+    .reverse(), [conversation.turns]);
 
   const setToolOverrideMode = (toolName: ToolName, mode: "mock" | "api" | "default") => {
     setPerToolMode(toolName, mode === "default" ? undefined : mode);
