@@ -22,7 +22,8 @@ function buildQuery(query?: PortalRequestOptions["query"]) {
 
 export async function callSupportPortal<T>(options: PortalRequestOptions): Promise<T> {
   const method = options.method ?? "GET";
-  const response = await fetch(`${baseUrl()}${options.endpoint}${buildQuery(options.query)}`, {
+  const url = `${baseUrl()}${options.endpoint}${buildQuery(options.query)}`;
+  const response = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -33,7 +34,9 @@ export async function callSupportPortal<T>(options: PortalRequestOptions): Promi
   });
 
   if (!response.ok) {
-    throw new Error(`Support Portal API request failed (${response.status})`);
+    const bodyText = await response.text().catch(() => "");
+    const detail = bodyText ? `: ${bodyText.slice(0, 200)}` : "";
+    throw new Error(`Support Portal API request failed (${response.status}) at ${method} ${url}${detail}`);
   }
 
   return (await response.json()) as T;
