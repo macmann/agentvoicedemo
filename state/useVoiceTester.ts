@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapture } from "@/audio/sttAdapter";
-import { isSynthesizedAudioPlaying, playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
+import { getSpeechSynthesis, isSynthesizedAudioPlaying, playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
 import { SessionState } from "@/types/session";
 import { PlaybackStatus, TesterConversationState, TesterInputSource, TesterMessage, TesterSttState, TesterTurnRecord, TurnStatus, VoicePhase } from "@/types/tester";
@@ -12,6 +12,14 @@ import { useDashboardRuntimeConfig } from "@/state/useDashboardRuntimeConfig";
 
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function buildTtsSettings(voiceStyle: string) {
+  return {
+    voiceStyle,
+    speed: voiceStyle === "warm-friendly" ? 1 : 0.95,
+    streamingEnabled: true
+  };
 }
 
 const initialConversation = (): TesterConversationState => ({
@@ -162,20 +170,47 @@ export function useVoiceTester() {
         }
       });
 
+      let session = output.session;
+      let ttsPlayed = output.session.tts?.status === "played";
+      let ttsFirstAudioMs = output.metadata.latency?.ttsFirstAudioMs;
+
+      if (config.orchestrationApproach === "agentic" && voiceModeEnabled && output.responseText) {
+        const tts = await getSpeechSynthesis(output.responseText, buildTtsSettings(config.ttsVoiceStyle));
+        const playback = await playSynthesizedAudio(tts);
+        ttsPlayed = playback.ok;
+        ttsFirstAudioMs = playback.firstAudioMs ?? tts.firstAudioLatencyMs;
+        session = {
+          ...session,
+          tts: playback.ok ? { ...tts, status: "played" } : { ...tts, status: "fallback", reason: playback.reason ?? tts.reason },
+          latency: {
+            ...session.latency,
+            ttsFirstAudioMs
+          }
+        };
+      }
+
       const turn: TesterTurnRecord = {
         id: userTurnId,
         createdAt: output.createdAt,
         inputSource: source,
         transcriptText: output.transcriptText,
         finalResponseText: output.responseText,
-        metadata: output.metadata,
+        metadata: {
+          ...output.metadata,
+          ttsProviderMode: session.tts?.provider,
+          latency: {
+            ...output.metadata.latency,
+            ttsFirstAudioMs,
+            ttfaMs: ttsFirstAudioMs
+          }
+        },
         playbackStatus: voiceModeEnabled ? "playing" : "idle",
         fallbackInfo: output.fallbackInfo,
         errorInfo: output.errorInfo,
-        session: output.session
+        session
       };
 
-      setLastSession(output.session);
+      setLastSession(session);
       setConversation((prev) => ({ ...prev, turns: [...prev.turns, turn] }));
 
       if (output.fillerResponseText) {
@@ -209,7 +244,6 @@ export function useVoiceTester() {
         });
       }
 
-      const ttsPlayed = output.session.tts?.status === "played";
       setStatus(voiceModeEnabled && ttsPlayed ? "speaking" : "idle");
       setPlaybackStatus(voiceModeEnabled && ttsPlayed ? "playing" : "unavailable");
     } catch (error) {
