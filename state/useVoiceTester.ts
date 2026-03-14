@@ -118,7 +118,20 @@ export function useVoiceTester() {
 
     try {
       let announcedToolStage = false;
-      const output = await runTesterTurn({
+      const output = config.orchestrationApproach === "agentic"
+        ? await (await fetch("/api/agentic-turn", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              utterance: text,
+              inputSource: source,
+              previousSession: lastSession,
+              runtimeToolConfig: runtimeConfig,
+              voiceModeEnabled,
+              ttsVoiceStyle: config.ttsVoiceStyle
+            })
+          })).json()
+        : await runTesterTurn({
         utterance: text,
         inputSource: source,
         sttCapture,
@@ -335,9 +348,7 @@ export function useVoiceTester() {
         status: "error"
       });
       setStatus("error");
-      if (result.failureType === "permission_denied") {
-        hasMicrophonePermission.current = false;
-      }
+      hasMicrophonePermission.current = false;
     }
   };
 

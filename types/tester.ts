@@ -28,6 +28,9 @@ export interface TesterLatencyMetrics {
 
 export interface TesterDebugState {
   intent?: string;
+  orchestrationApproach?: "hybrid" | "agentic";
+  agenticModel?: string;
+  agenticToolsAvailable?: string[];
   intentUnderstandingMode?: "deterministic" | "llm_assisted";
   intentModeLabel?: "Deterministic" | "LLM-assisted";
   postToolResponseModeUsed?: "deterministic" | "llm_generated";

@@ -6,7 +6,7 @@ import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
 import { ToolName } from "@/tools/toolTypes";
 import { useVoiceTester } from "@/state/useVoiceTester";
 import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
-import { IntentUnderstandingMode, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
+import { IntentUnderstandingMode, OrchestrationApproach, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
 
 function StatusPill({ label, active }: { label: string; active: boolean }) {
   return (
@@ -154,6 +154,7 @@ export function VoiceTesterPage() {
   };
 
   const summaryRows = [
+    ["Approach", dashboardConfig.orchestrationApproach],
     ["Input mode", latestTurn?.metadata.intentUnderstandingMode ?? "-"],
     ["Support intent", latestTurn?.metadata.supportIntent ?? "none"],
     ["Routing", latestTurn?.metadata.routingDecision ?? "-"],
@@ -175,6 +176,7 @@ export function VoiceTesterPage() {
             <StatusPill label={statusText} active={status !== "idle"} />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">Approach: {dashboardConfig.orchestrationApproach === "agentic" ? "Agentic" : "Hybrid"}</span>
             <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-medium text-violet-800">Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
             <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">Response: {responseModeLabel(dashboardConfig.postToolResponseMode)}</span>
             <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">KB: {dashboardConfig.troubleshootingKbMode}</span>
@@ -207,7 +209,7 @@ export function VoiceTesterPage() {
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <button type="button" disabled={isProcessing || status === "listening"} onClick={startListening} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">🎙 Talk</button>
-            <button type="button" disabled={status !== "listening"} onClick={stopListening} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40">Stop</button>
+            <button type="button" disabled={status !== "listening"} onClick={() => { void stopListening(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40">Stop</button>
             <button type="button" onClick={() => setVoiceModeEnabled((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Voice: {voiceModeEnabled ? "On" : "Off"}</button>
             <button type="button" onClick={replayLastAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs" disabled={!latestTurn}>Replay</button>
             <button type="button" onClick={stopAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Mute</button>
@@ -226,8 +228,15 @@ export function VoiceTesterPage() {
         <SectionCard title="Configuration" description="All runtime toggles are grouped here for quick tuning.">
           <div className="space-y-3 text-xs">
             <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Approach</span>
+              <select className="w-full rounded-lg border border-emerald-300 bg-white p-2" value={dashboardConfig.orchestrationApproach} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, orchestrationApproach: e.target.value as OrchestrationApproach }))}>
+                <option value="hybrid">Hybrid</option>
+                <option value="agentic">Agentic (OpenAI Agent SDK)</option>
+              </select>
+            </label>
+            <label className="block">
               <span className="mb-1 block font-medium text-slate-700">Intent understanding</span>
-              <select className="w-full rounded-lg border border-violet-300 bg-white p-2" value={dashboardConfig.intentUnderstandingMode} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}>
+              <select disabled={dashboardConfig.orchestrationApproach === "agentic"} className="w-full rounded-lg border border-violet-300 bg-white p-2 disabled:opacity-50" value={dashboardConfig.intentUnderstandingMode} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, intentUnderstandingMode: e.target.value as IntentUnderstandingMode }))}>
                 <option value="deterministic">Deterministic</option>
                 <option value="llm_assisted">LLM-assisted</option>
               </select>

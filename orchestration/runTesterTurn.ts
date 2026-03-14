@@ -416,7 +416,7 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
       createdAt,
       fallbackInfo: stt.reason,
       errorInfo: stt.failureType,
-      metadata: { providerMode: providerMode(state), toolExecutionMode: state.toolExecution?.executionMode, latency: { sttFinalizationMs, totalTurnMs: sttFinalizationMs, sttMs: sttFinalizationMs, totalMs: sttFinalizationMs }, routingDecision: "clarify", voicePhase: "processing" }
+      metadata: { orchestrationApproach: "hybrid", providerMode: providerMode(state), toolExecutionMode: state.toolExecution?.executionMode, latency: { sttFinalizationMs, totalTurnMs: sttFinalizationMs, sttMs: sttFinalizationMs, totalMs: sttFinalizationMs }, routingDecision: "clarify", voicePhase: "processing" }
     };
   }
 
