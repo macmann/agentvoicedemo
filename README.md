@@ -11,6 +11,24 @@ npm run dev
 
 Open http://localhost:3000.
 
+## Agentic architecture (additional path)
+
+A second orchestration path now exists in parallel to the current hybrid pipeline:
+
+- **Hybrid** (existing): intent understanding + deterministic policy/routing.
+- **Agentic** (new): OpenAI Agent SDK decides tool usage directly (no intent-classification gate).
+
+Use:
+
+- `/tester` and switch **Approach** between `Hybrid` and `Agentic`.
+- `/agentic-console` for a dedicated agentic-configured console.
+
+Optional env var:
+
+```bash
+OPENAI_AGENT_MODEL=gpt-4.1-mini
+```
+
 ## Hybrid Understanding Layer configuration
 
 The understanding node supports **live structured interpretation** with graceful fallback to the deterministic mock provider.

@@ -9,10 +9,12 @@ export type UnderstandingMode = "mock" | "live" | "mixed";
 export type TtsProviderMode = "mock_browser" | "openai";
 export type IntentUnderstandingMode = "deterministic" | "llm_assisted";
 export type PostToolResponseMode = "deterministic" | "llm_generated";
+export type OrchestrationApproach = "hybrid" | "agentic";
 
 export interface DashboardRuntimeConfig {
   toolConfig: RuntimeToolConfig;
   understandingMode: UnderstandingMode;
+  orchestrationApproach: OrchestrationApproach;
   intentUnderstandingMode: IntentUnderstandingMode;
   postToolResponseMode: PostToolResponseMode;
   understandingModel: string;
@@ -35,6 +37,7 @@ export const DASHBOARD_RUNTIME_STORAGE_KEY = "voiceai.dashboard.runtime.config.v
 const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   toolConfig: {},
   understandingMode: "mixed",
+  orchestrationApproach: "hybrid",
   intentUnderstandingMode: "deterministic",
   postToolResponseMode: "deterministic",
   understandingModel: "gpt-5-mini",
@@ -70,12 +73,14 @@ const RuntimeContext = createContext<RuntimeContextValue | undefined>(undefined)
 
 function sanitizeConfig(raw: unknown): DashboardRuntimeConfig {
   const candidate = (raw ?? {}) as Partial<DashboardRuntimeConfig>;
+  const orchestrationApproach = candidate.orchestrationApproach === "agentic" ? "agentic" : "hybrid";
   const intentUnderstandingMode = candidate.intentUnderstandingMode === "llm_assisted" ? "llm_assisted" : "deterministic";
   const postToolResponseMode = candidate.postToolResponseMode === "llm_generated" ? "llm_generated" : "deterministic";
   const troubleshootingKbMode = candidate.troubleshootingKbMode === "off" ? "off" : "on";
   return {
     ...DEFAULT_CONFIG,
     ...candidate,
+    orchestrationApproach,
     intentUnderstandingMode,
     postToolResponseMode,
     troubleshootingKbMode,

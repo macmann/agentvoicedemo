@@ -318,7 +318,7 @@ export function OpsQaDashboard() {
           <form onSubmit={submit} className="space-y-2 border-t border-slate-200 bg-white p-3">
             <div className="flex flex-wrap gap-2 text-xs">
               <button type="button" className="rounded-lg border border-slate-300 px-2 py-1" onClick={tester.startListening} disabled={tester.isProcessing || tester.sttState.isListening || !config.voiceModeEnabled}>Start voice</button>
-              <button type="button" className="rounded-lg border border-slate-300 px-2 py-1" onClick={tester.stopListening} disabled={!tester.sttState.isListening}>Stop voice</button>
+              <button type="button" className="rounded-lg border border-slate-300 px-2 py-1" onClick={() => { void tester.stopListening(); }} disabled={!tester.sttState.isListening}>Stop voice</button>
               <button type="button" className="rounded-lg border border-slate-300 px-2 py-1" onClick={tester.replayLastAudio}>Replay latest audio</button>
               <button type="button" className="rounded-lg border border-slate-300 px-2 py-1" onClick={tester.stopAudio}>Stop audio</button>
             </div>
