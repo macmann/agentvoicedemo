@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { clearStoredTurns, loadStoredTurns, saveStoredTurns } from "@/state/testerHistoryStorage";
 import { requestMicrophonePermission, startMicrophoneCapture, stopMicrophoneCapture } from "@/audio/sttAdapter";
 import { getSpeechSynthesis, isSynthesizedAudioPlaying, playSynthesizedAudio, stopSynthesizedAudio } from "@/audio/ttsAdapter";
 import { runTesterTurn } from "@/orchestration/runTesterTurn";
@@ -40,7 +41,13 @@ const initialSttState = (): TesterSttState => ({
 });
 
 export function useVoiceTester() {
-  const [conversation, setConversation] = useState<TesterConversationState>(() => initialConversation());
+  const [conversation, setConversation] = useState<TesterConversationState>(() => {
+    const initial = initialConversation();
+    return {
+      ...initial,
+      turns: loadStoredTurns()
+    };
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(true);
   const [lastSession, setLastSession] = useState<SessionState>();
@@ -87,6 +94,10 @@ export function useVoiceTester() {
   useEffect(() => {
     conversationStatusRef.current = conversation.status;
   }, [conversation.status]);
+
+  useEffect(() => {
+    saveStoredTurns(conversation.turns);
+  }, [conversation.turns]);
 
   const upsertDraftMessage = (text: string) => {
     const trimmed = text.trim();
@@ -462,6 +473,7 @@ export function useVoiceTester() {
     stopMicrophoneCapture();
     clearDraftMessage();
     setConversation(initialConversation());
+    clearStoredTurns();
     setLastSession(undefined);
     setPlaybackStatus("idle");
     setSttState(initialSttState());
