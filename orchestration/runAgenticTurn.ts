@@ -4,7 +4,7 @@ import { runToolExecution } from "@/tools/toolRunner";
 import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { SessionState } from "@/types/session";
 import { TesterDebugState, TesterInputSource, VoicePhase } from "@/types/tester";
-import { loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
+import { composeInlineTroubleshootingKb, InlineTroubleshootingKbFile, loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
 import { buildTroubleshootingResponse, detectHomeInternetIssue } from "@/orchestration/troubleshootingWorkflow";
 
 export interface RunAgenticTurnInput {
@@ -16,6 +16,7 @@ export interface RunAgenticTurnInput {
   ttsVoiceStyle?: string;
   troubleshootingKbMode?: "off" | "on";
   troubleshootingKbSource?: string;
+  uploadedTroubleshootingKbs?: InlineTroubleshootingKbFile[];
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -77,7 +78,9 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
 
   if (homeInternetIssueDetected && troubleshootingMode === "on") {
     try {
-      const kb = await loadTroubleshootingKb(input.troubleshootingKbSource);
+      const kb = input.uploadedTroubleshootingKbs?.length
+        ? composeInlineTroubleshootingKb(input.uploadedTroubleshootingKbs)
+        : await loadTroubleshootingKb(input.troubleshootingKbSource);
       const troubleshootingResult = buildTroubleshootingResponse({
         utterance: transcriptText,
         kb,

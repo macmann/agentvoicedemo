@@ -21,7 +21,7 @@ A second orchestration path now exists in parallel to the current hybrid pipelin
 Use:
 
 - `/tester` and switch **Approach** between `Hybrid` and `Agentic`.
-- `/agentic-console` for a dedicated agentic-configured console.
+- `/knowledge-base` to upload and preview markdown knowledge files used for troubleshooting.
 
 Optional env var:
 

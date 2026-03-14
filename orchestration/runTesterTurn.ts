@@ -6,7 +6,7 @@ import { deriveConversationState, resolvePendingQuestionAnswer, SlotResolutionRe
 import { buildClarificationPrompt, isSlotNoiseTurnAct, responseForStrategy } from "@/orchestration/conversationPolicy";
 import { runDeterministicHandoffPolicy, runDeterministicRoutingPolicy, runDeterministicUnderstandingPolicy } from "@/orchestration/deterministicPolicy";
 import { buildResponseContext } from "@/orchestration/responseContext";
-import { loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
+import { composeInlineTroubleshootingKb, InlineTroubleshootingKbFile, loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
 import { buildTroubleshootingResponse, shouldEnterTroubleshooting, TroubleshootingResolutionDetection } from "@/orchestration/troubleshootingWorkflow";
 import { runToolExecution } from "@/tools/toolRunner";
 import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
@@ -375,6 +375,7 @@ export interface RunTesterTurnInput {
   postToolResponseMode?: "deterministic" | "llm_generated";
   troubleshootingKbMode?: "off" | "on";
   troubleshootingKbSource?: string;
+  uploadedTroubleshootingKbs?: InlineTroubleshootingKbFile[];
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -627,7 +628,9 @@ export async function runTesterTurn(input: RunTesterTurnInput): Promise<RunTeste
 
   if (troubleshootingEligible || input.previousSession?.conversation?.troubleshooting?.active) {
     try {
-      const kb = await loadTroubleshootingKb(input.troubleshootingKbSource);
+      const kb = input.uploadedTroubleshootingKbs?.length
+        ? composeInlineTroubleshootingKb(input.uploadedTroubleshootingKbs)
+        : await loadTroubleshootingKb(input.troubleshootingKbSource);
       const troubleshootingResult = buildTroubleshootingResponse({
         utterance: transcriptText,
         kb,
