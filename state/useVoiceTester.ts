@@ -493,6 +493,10 @@ export function useVoiceTester() {
       return;
     }
 
+    if (isProcessing) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       void startListening();
     }, 150);
