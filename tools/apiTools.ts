@@ -1,6 +1,16 @@
 import { ToolConfig } from "@/tools/toolConfigs";
 import { ToolExecutionResult, ToolRequestByName, ToolName } from "@/tools/toolTypes";
 
+function resolveEndpointUrl(endpoint: string): string {
+  if (/^https?:\/\//.test(endpoint)) return endpoint;
+
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_SITE_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+    ?? "http://localhost:3000";
+
+  return new URL(endpoint, configuredBaseUrl).toString();
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -30,9 +40,12 @@ export async function executeApiTool<TName extends ToolName>(
     };
   }
 
+  let endpoint = config.endpoint;
+
   try {
+    endpoint = resolveEndpointUrl(config.endpoint);
     const response = await withTimeout(
-      fetch(config.endpoint, {
+      fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool_name: toolName, request })
@@ -54,7 +67,7 @@ export async function executeApiTool<TName extends ToolName>(
         status: "failure",
         request,
         mode: "api",
-        endpoint: config.endpoint,
+        endpoint,
         error: `API request failed (${response.status})`,
         fallback_behavior: config.fallbackBehavior,
         raw_response: rawPayload
@@ -68,7 +81,7 @@ export async function executeApiTool<TName extends ToolName>(
         status: "failure",
         request,
         mode: "api",
-        endpoint: config.endpoint,
+        endpoint,
         error: String(data.error ?? "API tool returned failure"),
         fallback_behavior: config.fallbackBehavior,
         raw_response: rawPayload
@@ -81,7 +94,7 @@ export async function executeApiTool<TName extends ToolName>(
       request,
       result: (data.result ?? {}) as never,
       mode: "api",
-      endpoint: config.endpoint,
+      endpoint,
       fallback_behavior: config.fallbackBehavior,
       raw_response: rawPayload
     };
@@ -91,7 +104,7 @@ export async function executeApiTool<TName extends ToolName>(
       status: "failure",
       request,
       mode: "api",
-      endpoint: config.endpoint,
+      endpoint,
       error: error instanceof Error ? error.message : "Unknown API error",
       fallback_behavior: config.fallbackBehavior
     };
