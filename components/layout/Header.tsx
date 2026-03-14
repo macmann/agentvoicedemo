@@ -14,8 +14,8 @@ export function Header() {
           <Link className="text-neutral-700 hover:text-neutral-900" href="/tester">
             Tester UI
           </Link>
-          <Link className="text-neutral-700 hover:text-neutral-900" href="/agentic-console">
-            Agentic Console
+          <Link className="text-neutral-700 hover:text-neutral-900" href="/knowledge-base">
+            Knowledge Base
           </Link>
           <Link className="text-neutral-700 hover:text-neutral-900" href="/insights">
             Insights

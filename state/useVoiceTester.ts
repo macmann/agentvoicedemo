@@ -138,7 +138,8 @@ export function useVoiceTester() {
               voiceModeEnabled,
               ttsVoiceStyle: config.ttsVoiceStyle,
               troubleshootingKbMode: config.troubleshootingKbMode,
-              troubleshootingKbSource: config.troubleshootingKbSource
+              troubleshootingKbSource: config.troubleshootingKbSource,
+              uploadedTroubleshootingKbs: config.uploadedTroubleshootingKbs
             })
           })).json()
         : await runTesterTurn({
@@ -156,6 +157,7 @@ export function useVoiceTester() {
         postToolResponseMode: config.postToolResponseMode,
         troubleshootingKbMode: config.troubleshootingKbMode,
         troubleshootingKbSource: config.troubleshootingKbSource,
+        uploadedTroubleshootingKbs: config.uploadedTroubleshootingKbs,
         onStage: (phase) => {
           setStatus(phaseToStatus[phase]);
           if (phase === "checking_tool" && !announcedToolStage) {

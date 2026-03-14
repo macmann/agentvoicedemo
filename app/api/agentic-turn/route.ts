@@ -1,4 +1,5 @@
 import { runAgenticTurn } from "@/orchestration/runAgenticTurn";
+import { InlineTroubleshootingKbFile } from "@/orchestration/troubleshootingKb";
 import { SessionState } from "@/types/session";
 
 export async function POST(req: Request) {
@@ -11,6 +12,7 @@ export async function POST(req: Request) {
     ttsVoiceStyle?: string;
     troubleshootingKbMode?: "off" | "on";
     troubleshootingKbSource?: string;
+    uploadedTroubleshootingKbs?: InlineTroubleshootingKbFile[];
   };
 
   const output = await runAgenticTurn({
@@ -21,7 +23,8 @@ export async function POST(req: Request) {
     voiceModeEnabled: Boolean(body.voiceModeEnabled),
     ttsVoiceStyle: body.ttsVoiceStyle,
     troubleshootingKbMode: body.troubleshootingKbMode,
-    troubleshootingKbSource: body.troubleshootingKbSource
+    troubleshootingKbSource: body.troubleshootingKbSource,
+    uploadedTroubleshootingKbs: body.uploadedTroubleshootingKbs
   });
 
   return Response.json(output);

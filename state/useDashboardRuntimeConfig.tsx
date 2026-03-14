@@ -11,6 +11,11 @@ export type IntentUnderstandingMode = "deterministic" | "llm_assisted";
 export type PostToolResponseMode = "deterministic" | "llm_generated";
 export type OrchestrationApproach = "hybrid" | "agentic";
 
+export interface UploadedTroubleshootingKbFile {
+  name: string;
+  markdown: string;
+}
+
 export interface DashboardRuntimeConfig {
   toolConfig: RuntimeToolConfig;
   understandingMode: UnderstandingMode;
@@ -30,6 +35,7 @@ export interface DashboardRuntimeConfig {
   debugVerbosity: DebugVerbosity;
   troubleshootingKbMode: "off" | "on";
   troubleshootingKbSource: string;
+  uploadedTroubleshootingKbs: UploadedTroubleshootingKbFile[];
 }
 
 export const DASHBOARD_RUNTIME_STORAGE_KEY = "voiceai.dashboard.runtime.config.v1";
@@ -52,7 +58,8 @@ const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   silenceTimeoutMs: 1000,
   debugVerbosity: "detailed",
   troubleshootingKbMode: "on",
-  troubleshootingKbSource: "/public/kb/troubleshooting.md"
+  troubleshootingKbSource: "/public/kb/troubleshooting.md",
+  uploadedTroubleshootingKbs: []
 };
 
 export type DemoPresetKey = "stable_mock_demo" | "live_outage_api_demo" | "mixed_mode_demo" | "fast_latency_demo" | "clarification_handoff_demo";
@@ -85,6 +92,14 @@ function sanitizeConfig(raw: unknown): DashboardRuntimeConfig {
     postToolResponseMode,
     troubleshootingKbMode,
     troubleshootingKbSource: typeof candidate.troubleshootingKbSource === "string" && candidate.troubleshootingKbSource.trim() ? candidate.troubleshootingKbSource : DEFAULT_CONFIG.troubleshootingKbSource,
+    uploadedTroubleshootingKbs: Array.isArray(candidate.uploadedTroubleshootingKbs)
+      ? candidate.uploadedTroubleshootingKbs
+          .map((file) => ({
+            name: typeof file?.name === "string" ? file.name : "",
+            markdown: typeof file?.markdown === "string" ? file.markdown : ""
+          }))
+          .filter((file) => file.name.trim() && file.markdown.trim())
+      : DEFAULT_CONFIG.uploadedTroubleshootingKbs,
     ttsVoiceStyle: typeof candidate.ttsVoiceStyle === "string" && candidate.ttsVoiceStyle.trim() ? candidate.ttsVoiceStyle : DEFAULT_CONFIG.ttsVoiceStyle,
     toolConfig: sanitizeRuntimeToolConfig(candidate.toolConfig ?? {})
   };

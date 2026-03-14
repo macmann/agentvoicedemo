@@ -12,6 +12,11 @@ export interface TroubleshootingKbDocument {
   sections: TroubleshootingKbSection[];
 }
 
+export interface InlineTroubleshootingKbFile {
+  name: string;
+  markdown: string;
+}
+
 const DEFAULT_KB_PATH = "/public/kb/troubleshooting.md";
 
 let cachedKb: TroubleshootingKbDocument | undefined;
@@ -31,14 +36,14 @@ function parseSteps(lines: string[]): string[] {
     .filter(Boolean);
 }
 
-function parseSection(title: string, bodyLines: string[]): TroubleshootingKbSection {
+function parseSection(title: string, bodyLines: string[], source: string): TroubleshootingKbSection {
   const normalized = bodyLines.map((line) => line.trim());
   const escalationIndex = normalized.findIndex((line) => /^(#{3,6}\s+)?escalation criteria\b/i.test(line));
   const stepLines = escalationIndex >= 0 ? normalized.slice(0, escalationIndex) : normalized;
   const escalationLines = escalationIndex >= 0 ? normalized.slice(escalationIndex + 1) : [];
 
   return {
-    id: slugify(title),
+    id: `${slugify(source)}--${slugify(title)}`,
     title,
     steps: parseSteps(stepLines),
     escalationCriteria: parseSteps(escalationLines),
@@ -55,7 +60,7 @@ export function parseTroubleshootingMarkdown(markdown: string, source: string): 
   for (const line of lines) {
     const headingMatch = line.match(/^##\s+(.+)$/);
     if (headingMatch) {
-      if (currentTitle) sections.push(parseSection(currentTitle, currentBody));
+      if (currentTitle) sections.push(parseSection(currentTitle, currentBody, source));
       currentTitle = headingMatch[1].trim();
       currentBody = [];
       continue;
@@ -63,7 +68,7 @@ export function parseTroubleshootingMarkdown(markdown: string, source: string): 
     if (currentTitle) currentBody.push(line);
   }
 
-  if (currentTitle) sections.push(parseSection(currentTitle, currentBody));
+  if (currentTitle) sections.push(parseSection(currentTitle, currentBody, source));
 
   return {
     source,
@@ -100,6 +105,24 @@ export async function loadTroubleshootingKb(source?: string): Promise<Troublesho
   const parsed = parseTroubleshootingMarkdown(markdown, selectedSource);
   cachedKb = parsed;
   return parsed;
+}
+
+export function composeInlineTroubleshootingKb(files: InlineTroubleshootingKbFile[]): TroubleshootingKbDocument {
+  const validFiles = files
+    .map((file) => ({ name: file.name.trim(), markdown: file.markdown }))
+    .filter((file) => file.name && file.markdown.trim());
+
+  if (!validFiles.length) {
+    throw new Error("No valid inline troubleshooting KB files were provided.");
+  }
+
+  const parsedDocs = validFiles.map((file) => parseTroubleshootingMarkdown(file.markdown, `uploaded:${file.name}`));
+
+  return {
+    source: parsedDocs.map((doc) => doc.source).join(", "),
+    loadedAt: new Date().toISOString(),
+    sections: parsedDocs.flatMap((doc) => doc.sections)
+  };
 }
 
 export function rankSectionsBySymptoms(params: {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
@@ -136,7 +137,6 @@ export function VoiceTesterPage() {
   const empty = conversation.messages.length === 0;
   const liveTranscript = sttState.finalTranscript || sttState.interimTranscript;
   const globalMode = runtimeConfig.globalMode ?? "default";
-
   const statusText = useMemo(() => {
     if (status === "listening") return sttState.isSpeechDetected ? "Listening" : "Listening (waiting for speech)";
     if (status === "thinking") return "Processing";
@@ -179,7 +179,7 @@ export function VoiceTesterPage() {
             <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">Approach: {dashboardConfig.orchestrationApproach === "agentic" ? "Agentic" : "Hybrid"}</span>
             <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-medium text-violet-800">Intent: {intentModeLabel(dashboardConfig.intentUnderstandingMode)}</span>
             <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">Response: {responseModeLabel(dashboardConfig.postToolResponseMode)}</span>
-            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">KB: {dashboardConfig.troubleshootingKbMode}</span>
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">KB: {dashboardConfig.troubleshootingKbMode} • files: {dashboardConfig.uploadedTroubleshootingKbs.length || "default"}</span>
             <span className={cn("rounded-full px-2 py-1 text-xs font-medium", globalMode === "default" ? "bg-slate-200 text-slate-700" : "bg-cyan-100 text-cyan-800")}>Tools: {globalMode === "default" ? "Code defaults" : globalMode.toUpperCase()}</span>
           </div>
         </header>
@@ -271,6 +271,9 @@ export function VoiceTesterPage() {
                 <option value="off">Off</option>
               </select>
             </label>
+            <Link href="/knowledge-base" className="block rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-xs font-medium text-blue-800">
+              Manage knowledge-base files & previews
+            </Link>
             <label className="block">
               <span className="mb-1 block font-medium text-slate-700">Voice style</span>
               <select className="w-full rounded-lg border border-emerald-300 bg-white p-2" value={dashboardConfig.ttsVoiceStyle} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, ttsVoiceStyle: e.target.value }))}>
@@ -306,6 +309,7 @@ export function VoiceTesterPage() {
         </SectionCard>
 
         <SectionCard title="Turn summary" description="Key routing information from the latest turn.">
+
           <div className="space-y-2 text-xs">
             {summaryRows.map(([label, value]) => (
               <div key={label} className="flex justify-between gap-3 rounded-lg bg-slate-50 px-2 py-1.5">
