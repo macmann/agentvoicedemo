@@ -128,7 +128,13 @@ export async function requestMicrophonePermission() {
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
     stream.getTracks().forEach((track) => track.stop());
     return { granted: true };
   } catch {
@@ -223,7 +229,13 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
   });
 
   void navigator.mediaDevices
-    .getUserMedia({ audio: true })
+    .getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
     .then((stream) => {
       activeMediaStream = stream;
       monitorSpeechEnergy({

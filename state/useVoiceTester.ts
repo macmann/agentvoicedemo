@@ -85,6 +85,25 @@ export function useVoiceTester() {
 
   const normalizeSpeechText = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 
+  const isLikelySpeakerEcho = (transcript: string) => {
+    const normalizedTranscript = normalizeSpeechText(transcript);
+    const normalizedAssistant = normalizeSpeechText(activeAssistantSpeechRef.current);
+    if (!normalizedTranscript || !normalizedAssistant) return false;
+
+    if (normalizedAssistant.includes(normalizedTranscript)) {
+      return true;
+    }
+
+    const transcriptWords = normalizedTranscript.split(" ").filter(Boolean);
+    const assistantWords = new Set(normalizedAssistant.split(" ").filter(Boolean));
+    if (transcriptWords.length < 3) {
+      return false;
+    }
+
+    const overlapCount = transcriptWords.filter((word) => assistantWords.has(word)).length;
+    return overlapCount / transcriptWords.length >= 0.8;
+  };
+
   const shouldInterruptForTranscript = (transcript: string) => {
     const normalizedTranscript = normalizeSpeechText(transcript);
     const rawTranscript = transcript.toLowerCase().trim();
@@ -371,6 +390,18 @@ export function useVoiceTester() {
         id: id("msg"),
         role: "system",
         text: result.reason ?? "No speech detected. Try again or use text input.",
+        createdAt: new Date().toISOString(),
+        status: "error"
+      });
+      setStatus("idle");
+      return;
+    }
+
+    if (isLikelySpeakerEcho(transcript)) {
+      appendMessage({
+        id: id("msg"),
+        role: "system",
+        text: "Ignored speaker echo. Please speak after playback stops or use a headset.",
         createdAt: new Date().toISOString(),
         status: "error"
       });
