@@ -52,7 +52,7 @@ const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   silenceTimeoutMs: 1000,
   debugVerbosity: "detailed",
   troubleshootingKbMode: "on",
-  troubleshootingKbSource: "/kb/troubleshooting.md"
+  troubleshootingKbSource: "/public/kb/troubleshooting.md"
 };
 
 export type DemoPresetKey = "stable_mock_demo" | "live_outage_api_demo" | "mixed_mode_demo" | "fast_latency_demo" | "clarification_handoff_demo";
