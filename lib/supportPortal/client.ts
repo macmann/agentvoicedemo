@@ -9,6 +9,12 @@ function baseUrl() {
   return process.env.OSS_PORTAL_BASE_URL ?? process.env.OSS_SUPPORT_PORTAL_BASE_URL ?? "https://api.oss-support-portal.example.com";
 }
 
+function buildPortalUrl(endpoint: string, query?: PortalRequestOptions["query"]) {
+  const normalizedBaseUrl = baseUrl().replace(/\/+$/, "");
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${normalizedBaseUrl}${normalizedEndpoint}${buildQuery(query)}`;
+}
+
 function buildQuery(query?: PortalRequestOptions["query"]) {
   const params = new URLSearchParams();
   if (!query) return "";
@@ -22,7 +28,7 @@ function buildQuery(query?: PortalRequestOptions["query"]) {
 
 export async function callSupportPortal<T>(options: PortalRequestOptions): Promise<T> {
   const method = options.method ?? "GET";
-  const url = `${baseUrl()}${options.endpoint}${buildQuery(options.query)}`;
+  const url = buildPortalUrl(options.endpoint, options.query);
   const response = await fetch(url, {
     method,
     headers: {
