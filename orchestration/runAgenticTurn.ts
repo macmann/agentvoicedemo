@@ -63,14 +63,14 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
       tool({
         name: "check_outage_status",
         description: "Check outage status for a service or region.",
-        parameters: z.object({ serviceNameOrRegion: z.string().optional() }),
-        execute: async (args) => executeTool("check_outage_status", { serviceNameOrRegion: args.serviceNameOrRegion ?? "" })
+        parameters: z.object({ serviceNameOrRegion: z.string() }),
+        execute: async (args) => executeTool("check_outage_status", { serviceNameOrRegion: args.serviceNameOrRegion })
       }),
       tool({
         name: "fetch_notifications",
         description: "Fetch active service notifications.",
-        parameters: z.object({ activeOnly: z.boolean().optional() }),
-        execute: async (args) => executeTool("fetch_notifications", { active: args.activeOnly ?? true })
+        parameters: z.object({ activeOnly: z.boolean() }),
+        execute: async (args) => executeTool("fetch_notifications", { active: args.activeOnly })
       }),
       tool({
         name: "diagnose_connectivity",

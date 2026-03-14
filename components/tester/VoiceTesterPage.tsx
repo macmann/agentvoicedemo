@@ -229,7 +229,18 @@ export function VoiceTesterPage() {
           <div className="space-y-3 text-xs">
             <label className="block">
               <span className="mb-1 block font-medium text-slate-700">Approach</span>
-              <select className="w-full rounded-lg border border-emerald-300 bg-white p-2" value={dashboardConfig.orchestrationApproach} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, orchestrationApproach: e.target.value as OrchestrationApproach }))}>
+              <select
+                className="w-full rounded-lg border border-emerald-300 bg-white p-2"
+                value={dashboardConfig.orchestrationApproach}
+                onChange={(e) => {
+                  const nextApproach = e.target.value as OrchestrationApproach;
+                  setDashboardConfig((prev) => ({
+                    ...prev,
+                    orchestrationApproach: nextApproach,
+                    postToolResponseMode: nextApproach === "agentic" ? "llm_generated" : prev.postToolResponseMode
+                  }));
+                }}
+              >
                 <option value="hybrid">Hybrid</option>
                 <option value="agentic">Agentic (OpenAI Agent SDK)</option>
               </select>
@@ -243,7 +254,12 @@ export function VoiceTesterPage() {
             </label>
             <label className="block">
               <span className="mb-1 block font-medium text-slate-700">Post-tool response</span>
-              <select className="w-full rounded-lg border border-indigo-300 bg-white p-2" value={dashboardConfig.postToolResponseMode} onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}>
+              <select
+                disabled={dashboardConfig.orchestrationApproach === "agentic"}
+                className="w-full rounded-lg border border-indigo-300 bg-white p-2 disabled:opacity-50"
+                value={dashboardConfig.postToolResponseMode}
+                onChange={(e) => setDashboardConfig((prev) => ({ ...prev, postToolResponseMode: e.target.value as PostToolResponseMode }))}
+              >
                 <option value="deterministic">Deterministic</option>
                 <option value="llm_generated">LLM-generated</option>
               </select>
