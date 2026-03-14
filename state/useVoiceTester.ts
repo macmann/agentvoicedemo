@@ -59,6 +59,7 @@ export function useVoiceTester() {
   const hasMicrophonePermission = useRef(false);
   const hasStartedVoiceLoop = useRef(false);
   const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(false);
+  const activeAssistantSpeechRef = useRef("");
   const activeTurnToken = useRef(0);
   const activeTurnAbortController = useRef<AbortController | null>(null);
   const conversationStatusRef = useRef<TurnStatus>("idle");
@@ -82,10 +83,34 @@ export function useVoiceTester() {
 
   const setStatus = (status: TurnStatus) => setConversation((prev) => ({ ...prev, status }));
 
+  const normalizeSpeechText = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+
+  const shouldInterruptForTranscript = (transcript: string) => {
+    const normalizedTranscript = normalizeSpeechText(transcript);
+    const rawTranscript = transcript.toLowerCase().trim();
+    if (!normalizedTranscript) return false;
+
+    const transcriptWords = normalizedTranscript.split(" ").filter(Boolean);
+    if (transcriptWords.length < 2) return false;
+
+    const assistantSpeech = normalizeSpeechText(activeAssistantSpeechRef.current);
+    if (assistantSpeech && assistantSpeech.includes(normalizedTranscript)) {
+      return false;
+    }
+
+    const interruptWords = ["stop", "wait", "hold on", "excuse me", "cancel"];
+    if (interruptWords.some((phrase) => normalizedTranscript.includes(phrase))) {
+      return true;
+    }
+
+    return rawTranscript.includes("?") || transcriptWords.length >= 4;
+  };
+
   const interruptCurrentWork = () => {
     activeTurnToken.current += 1;
     activeTurnAbortController.current?.abort();
     activeTurnAbortController.current = null;
+    activeAssistantSpeechRef.current = "";
     stopSynthesizedAudio();
     setPlaybackStatus("stopped");
     setIsProcessing(false);
@@ -98,6 +123,12 @@ export function useVoiceTester() {
   useEffect(() => {
     saveStoredTurns(conversation.turns);
   }, [conversation.turns]);
+
+  useEffect(() => {
+    if (playbackStatus !== "playing" && conversation.status !== "speaking") {
+      activeAssistantSpeechRef.current = "";
+    }
+  }, [playbackStatus, conversation.status]);
 
   const upsertDraftMessage = (text: string) => {
     const trimmed = text.trim();
@@ -210,8 +241,10 @@ export function useVoiceTester() {
       let ttsFirstAudioMs = output.metadata.latency?.ttsFirstAudioMs;
 
       if (config.orchestrationApproach === "agentic" && voiceModeEnabled && output.responseText) {
+        activeAssistantSpeechRef.current = output.responseText;
         const tts = await getSpeechSynthesis(output.responseText, buildTtsSettings(config.ttsVoiceStyle));
         const playback = await playSynthesizedAudio(tts);
+        activeAssistantSpeechRef.current = "";
         ttsPlayed = playback.ok;
         ttsFirstAudioMs = playback.firstAudioMs ?? tts.firstAudioLatencyMs;
         session = {
@@ -251,6 +284,9 @@ export function useVoiceTester() {
 
       setLastSession(session);
       setConversation((prev) => ({ ...prev, turns: [...prev.turns, turn] }));
+      if (voiceModeEnabled && ttsPlayed && output.responseText) {
+        activeAssistantSpeechRef.current = output.responseText;
+      }
 
       if (output.fillerResponseText) {
         appendMessage({
@@ -283,6 +319,9 @@ export function useVoiceTester() {
         });
       }
 
+      if (!(voiceModeEnabled && ttsPlayed)) {
+        activeAssistantSpeechRef.current = "";
+      }
       setStatus(voiceModeEnabled && ttsPlayed ? "speaking" : "idle");
       setPlaybackStatus(voiceModeEnabled && ttsPlayed ? "playing" : "unavailable");
     } catch (error) {
@@ -380,11 +419,6 @@ export function useVoiceTester() {
       return;
     }
 
-    if (isSynthesizedAudioPlaying() || playbackStatus === "playing" || conversationStatusRef.current === "speaking") {
-      stopSynthesizedAudio();
-      setPlaybackStatus("stopped");
-    }
-
     hasSubmittedCapture.current = false;
     setStatus("listening");
     setSttState({
@@ -398,19 +432,21 @@ export function useVoiceTester() {
       silenceThresholdMs: config.silenceTimeoutMs,
       onInterimTranscript: (interimTranscript) => {
         if (!config.streamingTranscript) return;
+        if (isSynthesizedAudioPlaying() && shouldInterruptForTranscript(interimTranscript)) {
+          interruptCurrentWork();
+        }
         setSttState((prev) => ({ ...prev, interimTranscript }));
         upsertDraftMessage(interimTranscript);
       },
       onFinalTranscript: (finalTranscript) => {
         if (!config.streamingTranscript) return;
+        if (isSynthesizedAudioPlaying() && shouldInterruptForTranscript(finalTranscript)) {
+          interruptCurrentWork();
+        }
         setSttState((prev) => ({ ...prev, finalTranscript }));
         upsertDraftMessage(finalTranscript);
       },
       onSpeechState: ({ isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }) => {
-        if (isSpeechDetected && conversationStatusRef.current === "speaking") {
-          stopSynthesizedAudio();
-          setPlaybackStatus("stopped");
-        }
         if (isSpeechDetected && isProcessing) {
           interruptCurrentWork();
         }
@@ -460,12 +496,14 @@ export function useVoiceTester() {
   };
 
   const stopAudio = () => {
+    activeAssistantSpeechRef.current = "";
     stopSynthesizedAudio();
     setPlaybackStatus("stopped");
     setStatus("idle");
   };
 
   const resetConversation = () => {
+    activeAssistantSpeechRef.current = "";
     hasStartedVoiceLoop.current = false;
     setIsVoiceSessionActive(false);
     interruptCurrentWork();
