@@ -21,6 +21,23 @@ interface OutageNotification {
   active?: boolean;
 }
 
+interface OutageCheckApiResponse {
+  overallStatus?: ServiceStatus | string;
+  status?: ServiceStatus | string;
+  serviceStatus?: ServiceStatus | string;
+  serviceName?: string;
+  matchedServiceName?: string;
+  region?: string;
+  matchedRegion?: string;
+  category?: string;
+  matchedCategory?: string;
+  estimatedRecoveryText?: string;
+  announcementTitle?: string;
+  announcementBody?: string;
+  clarificationNeeded?: boolean;
+  clarificationPrompt?: string;
+}
+
 function normalize(value: string | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -94,6 +111,64 @@ export async function POST(req: Request) {
   const query = body.request?.serviceNameOrRegion;
 
   try {
+    try {
+      const payload = await callSupportPortal<OutageCheckApiResponse>({
+        endpoint: "/v1/outages/check",
+        method: "POST",
+        payload: {
+          serviceNameOrRegion: query,
+          active: body.request?.active ?? true
+        }
+      });
+
+      const normalizedStatus = (payload.overallStatus ?? payload.serviceStatus ?? payload.status ?? "UNKNOWN") as ServiceStatus;
+      const matchedServiceName = payload.matchedServiceName ?? payload.serviceName;
+      const matchedRegion = payload.matchedRegion ?? payload.region;
+      const matchedCategory = payload.matchedCategory ?? payload.category;
+
+      return NextResponse.json({
+        tool_name: "check_outage_status",
+        status: "success",
+        result: {
+          rawQuery: query ?? "",
+          parsedRegion: matchedRegion,
+          parsedCategory: matchedCategory,
+          matchedServiceName,
+          matchedRegion,
+          matchedCategory,
+          overallStatus: normalizedStatus,
+          serviceStatus: payload.serviceStatus ?? payload.status,
+          announcementTitle: payload.announcementTitle,
+          announcementBody: payload.announcementBody,
+          estimatedRecoveryText: payload.estimatedRecoveryText,
+          clarificationNeeded: payload.clarificationNeeded ?? false,
+          clarificationPrompt: payload.clarificationPrompt,
+          source: {
+            serviceStatusUsed: true,
+            notificationsUsed: true
+          },
+          debug: {
+            parsedRegion: matchedRegion,
+            parsedCategory: matchedCategory,
+            candidateMatchesFound: {
+              region: [],
+              category: [],
+              combined: []
+            },
+            selectedMatch: matchedServiceName || matchedRegion ? {
+              name: matchedServiceName,
+              region: matchedRegion,
+              category: matchedCategory,
+              status: payload.serviceStatus ?? payload.status
+            } : null,
+            clarificationReason: payload.clarificationNeeded ? payload.clarificationPrompt ?? "Additional details required by upstream outage API" : null
+          }
+        }
+      });
+    } catch {
+      // Fall back to legacy split-feed aggregation for environments that only expose /api/* endpoints.
+    }
+
     const [serviceStatus, notifications] = await Promise.all([
       callSupportPortal<{ services?: OutageService[] }>({
         endpoint: "/api/service-status",
