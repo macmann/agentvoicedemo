@@ -166,7 +166,7 @@ export function VoiceTesterPage() {
 
   return (
     <main className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
-      <section className="flex min-h-[78vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="flex h-[78vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
