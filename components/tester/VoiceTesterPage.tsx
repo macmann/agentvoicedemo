@@ -122,6 +122,7 @@ export function VoiceTesterPage() {
     replayLastAudio,
     stopAudio,
     resetConversation,
+    isVoiceSessionActive,
     runtimeConfig,
     dashboardConfig,
     setDashboardConfig,
@@ -208,8 +209,8 @@ export function VoiceTesterPage() {
           )}
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <button type="button" disabled={isProcessing || status === "listening"} onClick={startListening} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">🎙 Talk</button>
-            <button type="button" disabled={status !== "listening"} onClick={() => { void stopListening(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40">Stop</button>
+            <button type="button" disabled={isVoiceSessionActive} onClick={startListening} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">🎙 {isVoiceSessionActive ? "Listening" : "Talk"}</button>
+            <button type="button" disabled={!isVoiceSessionActive} onClick={() => { void stopListening(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 disabled:opacity-40">Stop listening</button>
             <button type="button" onClick={() => setVoiceModeEnabled((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Voice: {voiceModeEnabled ? "On" : "Off"}</button>
             <button type="button" onClick={replayLastAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs" disabled={!latestTurn}>Replay</button>
             <button type="button" onClick={stopAudio} className="rounded-lg border border-slate-300 px-3 py-2 text-xs">Mute</button>
