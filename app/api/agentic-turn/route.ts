@@ -9,6 +9,8 @@ export async function POST(req: Request) {
     runtimeToolConfig?: Record<string, unknown>;
     voiceModeEnabled?: boolean;
     ttsVoiceStyle?: string;
+    troubleshootingKbMode?: "off" | "on";
+    troubleshootingKbSource?: string;
   };
 
   const output = await runAgenticTurn({
@@ -17,7 +19,9 @@ export async function POST(req: Request) {
     previousSession: body.previousSession,
     runtimeToolConfig: body.runtimeToolConfig,
     voiceModeEnabled: Boolean(body.voiceModeEnabled),
-    ttsVoiceStyle: body.ttsVoiceStyle
+    ttsVoiceStyle: body.ttsVoiceStyle,
+    troubleshootingKbMode: body.troubleshootingKbMode,
+    troubleshootingKbSource: body.troubleshootingKbSource
   });
 
   return Response.json(output);
