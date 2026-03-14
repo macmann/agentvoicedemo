@@ -1,6 +1,3 @@
-import path from "path";
-import { readFile } from "fs/promises";
-
 export interface TroubleshootingKbSection {
   id: string;
   title: string;
@@ -81,7 +78,8 @@ export async function loadTroubleshootingKb(source?: string): Promise<Troublesho
 
   const normalizedSource = selectedSource.replace(/\\/g, "/");
   const isLocalPath = /^(\/|\.?\.\/|[A-Za-z]:[\\/])/.test(normalizedSource);
-  if (isLocalPath) {
+  if (isLocalPath && typeof window === "undefined") {
+    const [{ readFile }, path] = await Promise.all([import("node:fs/promises"), import("node:path")]);
     const relativeSource = normalizedSource
       .replace(/^\/public\//, "public/")
       .replace(/^\/kb\//, "public/kb/")
