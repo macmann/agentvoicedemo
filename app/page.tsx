@@ -1,5 +1,5 @@
-import { VoiceAiDemoApp } from "@/components/demo/VoiceAiDemoApp";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  return <VoiceAiDemoApp />;
+  redirect("/insights");
 }
