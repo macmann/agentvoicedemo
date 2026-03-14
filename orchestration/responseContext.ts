@@ -82,7 +82,7 @@ export function buildResponseContext(input: BuildResponseContextInput): Response
       : "No pending workflow.",
     policyInstructions:
       troubleshootingState?.active
-        ? "Troubleshooting mode is active. Stay grounded in the markdown KB-derived steps only, ask one troubleshooting question at a time, and do not invent instructions."
-        : "Use responseMode and responseStrategy. For conversational_only responses be brief, natural, and ask at most one next-step question. For task_oriented responses stay precise and grounded to provided context only."
+        ? "Troubleshooting mode is active. Stay grounded in markdown KB-derived steps only, ask one troubleshooting question at a time, and never use general knowledge or invented instructions."
+        : "Use responseMode and responseStrategy. For conversational_only responses be brief, natural, and ask at most one next-step question. For task_oriented responses stay precise and grounded only to provided context and tool outputs; do not use general knowledge."
   };
 }

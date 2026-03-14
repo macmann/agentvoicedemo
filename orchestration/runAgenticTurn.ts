@@ -4,6 +4,8 @@ import { runToolExecution } from "@/tools/toolRunner";
 import { RuntimeToolConfig } from "@/tools/runtimeToolConfig";
 import { SessionState } from "@/types/session";
 import { TesterDebugState, TesterInputSource, VoicePhase } from "@/types/tester";
+import { loadTroubleshootingKb } from "@/orchestration/troubleshootingKb";
+import { buildTroubleshootingResponse, detectHomeInternetIssue } from "@/orchestration/troubleshootingWorkflow";
 
 export interface RunAgenticTurnInput {
   utterance: string;
@@ -12,6 +14,8 @@ export interface RunAgenticTurnInput {
   runtimeToolConfig?: RuntimeToolConfig;
   voiceModeEnabled: boolean;
   ttsVoiceStyle?: string;
+  troubleshootingKbMode?: "off" | "on";
+  troubleshootingKbSource?: string;
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -29,9 +33,12 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
   input.onStage?.("processing");
 
   const transcriptText = input.utterance.trim();
+  const troubleshootingMode = input.troubleshootingKbMode ?? "on";
+  const homeInternetIssueDetected = detectHomeInternetIssue(transcriptText);
 
   let selectedTool: SessionState["toolExecution"] | undefined;
   let toolResult: SessionState["toolResult"] | undefined;
+  let kbRetrieveError: string | undefined;
 
   const executeTool = async (toolName: "check_outage_status" | "fetch_notifications" | "diagnose_connectivity", payload: Record<string, unknown>) => {
     input.onStage?.("checking_tool");
@@ -54,11 +61,123 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
     return execution.toolResult.status === "success" ? execution.toolResult.result : { error: execution.toolResult.error };
   };
 
+  if (homeInternetIssueDetected && troubleshootingMode === "off") {
+    const responseText = "Troubleshooting KB is currently off, so I can’t provide troubleshooting steps from general knowledge. Please enable the KB mode to continue guided troubleshooting, or I can connect you to a human support agent.";
+    const session: SessionState = {
+      utterance: input.utterance,
+      responseText,
+      conversation: {
+        conversationId: input.previousSession?.conversation?.conversationId ?? crypto.randomUUID(),
+        turns: [
+          ...(input.previousSession?.conversation?.turns ?? []).slice(-20),
+          { id: `turn-${crypto.randomUUID()}`, role: "user", text: transcriptText, createdAt },
+          { id: `turn-${crypto.randomUUID()}`, role: "assistant", text: responseText, createdAt }
+        ],
+        currentStatus: "speaking",
+        pendingSlots: [],
+        collectedSlots: {},
+        activeSupportIntent: "troubleshooting"
+      },
+      latency: {
+        totalTurnMs: Date.now() - start,
+        sttFinalizationMs: 0,
+        responseGenerationMs: 0
+      }
+    };
+
+    return {
+      session,
+      responseText,
+      transcriptText,
+      createdAt,
+      metadata: {
+        orchestrationApproach: "agentic",
+        providerMode: "live",
+        routingDecision: "no_workflow",
+        agenticModel: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
+        agenticToolsAvailable: ["check_outage_status", "fetch_notifications", "diagnose_connectivity"],
+        troubleshootingMode,
+        troubleshootingActive: true,
+        troubleshootingResolutionStatus: "in_progress",
+        troubleshootingKbSource: input.troubleshootingKbSource ?? "/kb/troubleshooting.md",
+        latency: {
+          totalTurnMs: session.latency?.totalTurnMs
+        }
+      }
+    };
+  }
+
+  if (homeInternetIssueDetected && troubleshootingMode === "on") {
+    try {
+      const kb = await loadTroubleshootingKb(input.troubleshootingKbSource);
+      const troubleshootingResult = buildTroubleshootingResponse({
+        utterance: transcriptText,
+        kb,
+        previous: input.previousSession?.conversation?.troubleshooting,
+        maxStepsBeforeEscalation: 4
+      });
+
+      const responseText = troubleshootingResult.responseText;
+      const session: SessionState = {
+        utterance: input.utterance,
+        responseText,
+        conversation: {
+          conversationId: input.previousSession?.conversation?.conversationId ?? crypto.randomUUID(),
+          turns: [
+            ...(input.previousSession?.conversation?.turns ?? []).slice(-20),
+            { id: `turn-${crypto.randomUUID()}`, role: "user", text: transcriptText, createdAt },
+            { id: `turn-${crypto.randomUUID()}`, role: "assistant", text: responseText, createdAt }
+          ],
+          currentStatus: "speaking",
+          pendingSlots: [],
+          collectedSlots: {},
+          activeSupportIntent: troubleshootingResult.state.resolutionStatus === "resolved" ? undefined : "troubleshooting",
+          troubleshooting: troubleshootingResult.state
+        },
+        latency: {
+          totalTurnMs: Date.now() - start,
+          sttFinalizationMs: 0,
+          responseGenerationMs: 0
+        }
+      };
+
+      return {
+        session,
+        responseText,
+        transcriptText,
+        createdAt,
+        metadata: {
+          orchestrationApproach: "agentic",
+          providerMode: "live",
+          routingDecision: "no_workflow",
+          agenticModel: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
+          agenticToolsAvailable: ["check_outage_status", "fetch_notifications", "diagnose_connectivity"],
+          troubleshootingMode,
+          troubleshootingActive: troubleshootingResult.state.active,
+          troubleshootingIssueType: troubleshootingResult.state.issueType,
+          troubleshootingSelectedKBSections: troubleshootingResult.state.selectedKBSections,
+          troubleshootingCurrentStep: troubleshootingResult.state.stepsShown[troubleshootingResult.state.stepsShown.length - 1],
+          troubleshootingStepsShown: troubleshootingResult.state.stepsShown,
+          troubleshootingResolutionStatus: troubleshootingResult.state.resolutionStatus,
+          troubleshootingKbSource: troubleshootingResult.state.kbSource,
+          troubleshootingResolutionDetected: troubleshootingResult.resolutionDetection.resolved,
+          resolutionPhraseMatched: troubleshootingResult.resolutionDetection.resolutionPhraseMatched,
+          resolutionReason: troubleshootingResult.resolutionDetection.resolutionReason,
+          latency: {
+            totalTurnMs: session.latency?.totalTurnMs
+          }
+        }
+      };
+    } catch (error) {
+      kbRetrieveError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   const agent = new Agent({
     name: "AgenticSupportOrchestrator",
     model: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
     instructions:
-      "You are an enterprise support voice agent. Decide directly whether to call a tool. No intent classification. Use tools when status or diagnostics are needed. Keep responses concise and user-friendly.",
+      "You are an enterprise support voice agent. Decide directly whether to call a tool. No intent classification. Use tools when status or diagnostics are needed. Never answer with general world knowledge. If a needed fact is not in tool output or provided context, say you cannot verify it yet and ask a clarifying question or run a tool. Keep responses concise and user-friendly.",
     tools: [
       tool({
         name: "check_outage_status",
@@ -129,6 +248,11 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
       toolOutput: toolResult?.result,
       agenticModel: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
       agenticToolsAvailable: ["check_outage_status", "fetch_notifications", "diagnose_connectivity"],
+      troubleshootingMode,
+      troubleshootingActive: false,
+      troubleshootingKbSource: input.troubleshootingKbSource,
+      troubleshootingResolutionDetected: false,
+      resolutionReason: kbRetrieveError ? `kb_retrieval_failed:${kbRetrieveError}` : undefined,
       latency: {
         totalTurnMs: session.latency?.totalTurnMs,
         toolExecutionMs: selectedTool?.executionTimeMs

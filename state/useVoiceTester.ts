@@ -136,7 +136,9 @@ export function useVoiceTester() {
               previousSession: lastSession,
               runtimeToolConfig: runtimeConfig,
               voiceModeEnabled,
-              ttsVoiceStyle: config.ttsVoiceStyle
+              ttsVoiceStyle: config.ttsVoiceStyle,
+              troubleshootingKbMode: config.troubleshootingKbMode,
+              troubleshootingKbSource: config.troubleshootingKbSource
             })
           })).json()
         : await runTesterTurn({
