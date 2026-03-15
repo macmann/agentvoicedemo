@@ -32,6 +32,7 @@ interface StartMicOptions extends LiveCaptureCallbacks {
   language?: string;
   silenceThresholdMs?: number;
   speechEnergyThreshold?: number;
+  maxNoSpeechMs?: number;
 }
 
 declare global {
@@ -77,10 +78,11 @@ function monitorSpeechEnergy(options: {
   recordingStartedAt: number;
   silenceThresholdMs: number;
   speechEnergyThreshold: number;
+  maxNoSpeechMs: number;
   onSpeechState?: LiveCaptureCallbacks["onSpeechState"];
   onSilenceTimeout: () => void;
 }) {
-  const { stream, recordingStartedAt, silenceThresholdMs, speechEnergyThreshold, onSpeechState, onSilenceTimeout } = options;
+  const { stream, recordingStartedAt, silenceThresholdMs, speechEnergyThreshold, maxNoSpeechMs, onSpeechState, onSilenceTimeout } = options;
   const audioContext = new AudioContext();
   activeAudioContext = audioContext;
   const source = audioContext.createMediaStreamSource(stream);
@@ -108,6 +110,11 @@ function monitorSpeechEnergy(options: {
       isSpeechDetected = true;
       onSpeechState?.({ isSpeechDetected: true, silenceMs: 0, recordingStartedAt, lastSpeechAt });
     } else {
+      if (!isSpeechDetected && now - recordingStartedAt >= maxNoSpeechMs) {
+        onSilenceTimeout();
+        return;
+      }
+
       const silenceMs = now - lastSpeechAt;
       onSpeechState?.({ isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt: isSpeechDetected ? lastSpeechAt : undefined });
       if (isSpeechDetected && silenceMs >= silenceThresholdMs) {
@@ -143,7 +150,16 @@ export async function requestMicrophonePermission() {
 }
 
 export function startMicrophoneCapture(options: StartMicOptions = {}) {
-  const { language = "en-US", silenceThresholdMs = 1000, speechEnergyThreshold = 0.025, onInterimTranscript, onFinalTranscript, onSpeechState, onAutoSubmit } = options;
+  const {
+    language = "en-US",
+    silenceThresholdMs = 1000,
+    speechEnergyThreshold = 0.02,
+    maxNoSpeechMs = 9000,
+    onInterimTranscript,
+    onFinalTranscript,
+    onSpeechState,
+    onAutoSubmit
+  } = options;
 
   if (typeof window === "undefined") {
     return {
@@ -225,7 +241,17 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
       });
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      finalizeCapture({
+        transcript: "",
+        confidence: 0,
+        status: "fallback",
+        failureType: "recording_failure",
+        reason: "Unable to start browser speech recognition."
+      });
+    }
   });
 
   void navigator.mediaDevices
@@ -243,6 +269,7 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
         recordingStartedAt: activeStartTime,
         silenceThresholdMs,
         speechEnergyThreshold,
+        maxNoSpeechMs,
         onSpeechState,
         onSilenceTimeout: () => {
           onAutoSubmit?.();
