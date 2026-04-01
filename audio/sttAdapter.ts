@@ -48,6 +48,7 @@ let activeFinalize: ((result: BrowserMicCaptureResult) => void) | null = null;
 let activeMediaStream: MediaStream | null = null;
 let activeAudioContext: AudioContext | null = null;
 let activeVadRaf: number | null = null;
+let activeStopFinalizeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function cleanupVad() {
   if (activeVadRaf !== null) {
@@ -64,8 +65,16 @@ function cleanupVad() {
   }
 }
 
+function clearStopFinalizeTimeout() {
+  if (activeStopFinalizeTimeout) {
+    clearTimeout(activeStopFinalizeTimeout);
+    activeStopFinalizeTimeout = null;
+  }
+}
+
 function finalizeCapture(result: BrowserMicCaptureResult) {
   if (!activeFinalize) return;
+  clearStopFinalizeTimeout();
   cleanupVad();
   const done = activeFinalize;
   activeFinalize = null;
@@ -286,6 +295,17 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
 
 export function stopMicrophoneCapture() {
   cleanupVad();
+  if (activeFinalize && !activeStopFinalizeTimeout) {
+    activeStopFinalizeTimeout = setTimeout(() => {
+      finalizeCapture({
+        transcript: "",
+        confidence: 0,
+        status: "fallback",
+        failureType: "recording_failure",
+        reason: "Timed out waiting for speech recognition to stop."
+      });
+    }, 1200);
+  }
   activeRecognition?.stop();
 }
 
