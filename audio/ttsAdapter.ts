@@ -96,13 +96,43 @@ export async function playSynthesizedAudio(tts: TtsDiagnostics): Promise<{ ok: b
   if (tts.audioUrl) {
     activeAudio = new Audio(tts.audioUrl);
     activeAudio.volume = 1;
-    try {
-      await activeAudio.play();
-      const firstAudioMs = Date.now() - playbackStart;
-      return { ok: true, firstAudioMs, completedMs: firstAudioMs };
-    } catch {
-      return { ok: false, reason: "Autoplay blocked by browser; use Play button." };
-    }
+    return await new Promise((resolve) => {
+      if (!activeAudio) {
+        resolve({ ok: false, reason: "Audio playback unavailable." });
+        return;
+      }
+
+      let firstAudioMs: number | undefined;
+      const audio = activeAudio;
+
+      const cleanup = () => {
+        audio.removeEventListener("playing", onPlaying);
+        audio.removeEventListener("ended", onEnded);
+        audio.removeEventListener("error", onError);
+      };
+
+      const onPlaying = () => {
+        firstAudioMs = Date.now() - playbackStart;
+      };
+      const onEnded = () => {
+        cleanup();
+        const completedMs = Date.now() - playbackStart;
+        resolve({ ok: true, firstAudioMs: firstAudioMs ?? completedMs, completedMs });
+      };
+      const onError = () => {
+        cleanup();
+        resolve({ ok: false, reason: "Audio playback failed in browser." });
+      };
+
+      audio.addEventListener("playing", onPlaying, { once: true });
+      audio.addEventListener("ended", onEnded, { once: true });
+      audio.addEventListener("error", onError, { once: true });
+
+      audio.play().catch(() => {
+        cleanup();
+        resolve({ ok: false, reason: "Autoplay blocked by browser; use Play button." });
+      });
+    });
   }
 
   if (!("speechSynthesis" in window)) {
