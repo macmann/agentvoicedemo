@@ -83,23 +83,34 @@ export function detectTroubleshootingResolved(utterance: string): Troubleshootin
 
 export function detectHomeInternetIssue(utterance: string): boolean {
   const lowered = utterance.toLowerCase();
-  const issueTerms = [
-    "internet",
-    "wi-fi",
-    "wifi",
-    "router",
-    "modem",
-    "connection",
-    "offline",
-    "not working",
-    "no internet",
-    "still down",
+  const explicitTroubleshootingRequests = [
     "troubleshoot",
     "troubleshooting",
     "help me troubleshoot",
-    "can you troubleshoot"
+    "can you troubleshoot",
+    "help me fix my internet"
   ];
-  return issueTerms.some((token) => lowered.includes(token));
+  if (explicitTroubleshootingRequests.some((token) => lowered.includes(token))) return true;
+
+  const explicitIssuePhrases = [
+    "no internet",
+    "internet is down",
+    "internet down",
+    "wifi is down",
+    "wi-fi is down",
+    "not working",
+    "still down",
+    "offline",
+    "can’t connect",
+    "can't connect",
+    "connection keeps dropping",
+    "disconnected"
+  ];
+  if (explicitIssuePhrases.some((token) => lowered.includes(token))) return true;
+
+  const mentionsNetworkObject = /(internet|wi-?fi|router|modem|connection)/.test(lowered);
+  const mentionsProblemSignal = /(down|issue|problem|broken|slow|unstable|dropping|disconnect|offline|red light|blinking)/.test(lowered);
+  return mentionsNetworkObject && mentionsProblemSignal;
 }
 
 function extractSuspectedSymptoms(utterance: string, preTool?: PreToolUnderstandingResult): string[] {
