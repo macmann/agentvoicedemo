@@ -400,6 +400,11 @@ export function useVoiceTester() {
 
     const transcript = result.transcript.trim();
     if (!transcript) {
+      if (autoSubmitted) {
+        setStatus("idle");
+        return;
+      }
+
       appendMessage({
         id: id("msg"),
         role: "system",
