@@ -167,7 +167,7 @@ export function VoiceTesterPage() {
 
   return (
     <main className="grid min-h-[calc(100dvh-12rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
-      <section className="flex min-h-[42rem] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="flex min-h-[52rem] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -189,7 +189,7 @@ export function VoiceTesterPage() {
           <LatencyPanel latency={latestTurn?.metadata.latency} providerMode={latestTurn?.metadata.providerMode} />
         </div>
 
-        <div className="min-h-[108rem] flex-1 space-y-3 overflow-y-auto bg-slate-50/60 px-4 py-4 lg:min-h-0">
+        <div className="min-h-[24rem] flex-1 space-y-3 overflow-y-auto bg-slate-50/60 px-4 py-4 md:min-h-[28rem] lg:min-h-[30rem]">
           {empty && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Try: “Is there an outage?”, “Is FTTH in Berlin down?”, “Any upcoming announcements?”, or “I want to speak to a human.”</div>}
           {conversation.messages.map((message) => {
             const turn = message.turnId ? conversation.turns.find((item) => item.id === message.turnId) : undefined;
