@@ -52,7 +52,6 @@ export function useVoiceTester() {
   const draftMessageId = useRef<string | null>(null);
   const hasSubmittedCapture = useRef(false);
   const hasMicrophonePermission = useRef(false);
-  const hasStartedVoiceLoop = useRef(false);
   const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(false);
   const activeAssistantSpeechRef = useRef("");
   const recentAssistantSpeechRef = useRef<{ text: string; expiresAt: number }>({ text: "", expiresAt: 0 });
@@ -440,7 +439,6 @@ export function useVoiceTester() {
   };
 
   const startListening = async () => {
-    hasStartedVoiceLoop.current = true;
     setIsVoiceSessionActive(true);
     if (isProcessing) {
       interruptCurrentWork();
@@ -493,7 +491,7 @@ export function useVoiceTester() {
         upsertDraftMessage(finalTranscript);
       },
       onSpeechState: ({ isSpeechDetected, silenceMs, recordingStartedAt, lastSpeechAt }) => {
-        if (isSpeechDetected && isProcessing) {
+        if (isSpeechDetected && (isProcessing || isSynthesizedAudioPlaying())) {
           interruptCurrentWork();
         }
 
@@ -523,7 +521,6 @@ export function useVoiceTester() {
 
   const stopListening = async ({ stopVoiceLoop = true }: { stopVoiceLoop?: boolean } = {}) => {
     if (stopVoiceLoop) {
-      hasStartedVoiceLoop.current = false;
       setIsVoiceSessionActive(false);
     }
     if (isProcessing) {
@@ -552,7 +549,6 @@ export function useVoiceTester() {
   const resetConversation = () => {
     activeAssistantSpeechRef.current = "";
     recentAssistantSpeechRef.current = { text: "", expiresAt: 0 };
-    hasStartedVoiceLoop.current = false;
     setIsVoiceSessionActive(false);
     interruptCurrentWork();
     stopSynthesizedAudio();
@@ -565,13 +561,20 @@ export function useVoiceTester() {
     setSttState(initialSttState());
   };
 
+
+
   useEffect(() => {
-    if (!voiceModeEnabled) {
-      void stopListening();
+    if (voiceModeEnabled) {
+      setIsVoiceSessionActive(true);
       return;
     }
 
-    if (!hasStartedVoiceLoop.current) {
+    void stopListening({ stopVoiceLoop: false });
+    setIsVoiceSessionActive(false);
+  }, [voiceModeEnabled]);
+
+  useEffect(() => {
+    if (!voiceModeEnabled || !isVoiceSessionActive) {
       return;
     }
 
@@ -583,16 +586,12 @@ export function useVoiceTester() {
       return;
     }
 
-    if (conversation.status === "speaking" || playbackStatus === "playing" || isSynthesizedAudioPlaying()) {
-      return;
-    }
-
     const timer = setTimeout(() => {
       void startListening();
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [voiceModeEnabled, isProcessing, sttState.isListening, playbackStatus]);
+  }, [voiceModeEnabled, isVoiceSessionActive, isProcessing, sttState.isListening]);
 
   const latestTurn = useMemo(() => conversation.turns[conversation.turns.length - 1], [conversation.turns]);
   const toolHistory = useMemo(() => conversation.turns
