@@ -66,6 +66,13 @@ export function useVoiceTester() {
     setConversation((prev) => ({ ...prev, messages: [...prev.messages, message] }));
   };
 
+  const updateMessageText = (messageId: string, text: string) => {
+    setConversation((prev) => ({
+      ...prev,
+      messages: prev.messages.map((msg) => (msg.id === messageId ? { ...msg, text } : msg))
+    }));
+  };
+
   const phaseToStatus: Record<VoicePhase, TurnStatus> = {
     idle: "idle",
     listening: "listening",
@@ -272,11 +279,50 @@ export function useVoiceTester() {
       let session = output.session;
       let ttsPlayed = output.session.tts?.status === "played";
       let ttsFirstAudioMs = output.metadata.latency?.ttsFirstAudioMs;
+      const assistantMessageId = id("msg");
+      const assistantCreatedAt = output.createdAt;
+      const assistantText = output.responseText;
 
       if (config.orchestrationApproach === "agentic" && voiceModeEnabled && output.responseText) {
+        appendMessage({
+          id: assistantMessageId,
+          role: "assistant",
+          text: "",
+          createdAt: assistantCreatedAt,
+          turnId: userTurnId,
+          status: output.metadata.handoffTriggered ? "tool" : "speaking"
+        });
+
         rememberAssistantSpeech(output.responseText, 6000);
         const tts = await getSpeechSynthesis(output.responseText, buildTtsSettings(config.ttsVoiceStyle));
-        const playback = await playSynthesizedAudio(tts);
+        setPlaybackStatus("playing");
+
+        const playbackPromise = playSynthesizedAudio(tts);
+        const startedAt = Date.now();
+        const minCharsPerSecond = 18;
+        const maxCharsPerSecond = 42;
+        const estimatedCharsPerSecond = Math.min(maxCharsPerSecond, Math.max(minCharsPerSecond, Math.floor(output.responseText.length / 3)));
+        let streamedLength = 0;
+        let playbackCompleted = false;
+        playbackPromise.finally(() => {
+          playbackCompleted = true;
+        });
+
+        while (!playbackCompleted && streamedLength < output.responseText.length) {
+          if (turnToken !== activeTurnToken.current) {
+            break;
+          }
+          const elapsedSeconds = Math.max(0.1, (Date.now() - startedAt) / 1000);
+          const nextLength = Math.min(output.responseText.length, Math.floor(elapsedSeconds * estimatedCharsPerSecond));
+          if (nextLength > streamedLength) {
+            streamedLength = nextLength;
+            updateMessageText(assistantMessageId, output.responseText.slice(0, streamedLength));
+          }
+          await new Promise((resolve) => setTimeout(resolve, 45));
+        }
+
+        updateMessageText(assistantMessageId, output.responseText);
+        const playback = await playbackPromise;
         activeAssistantSpeechRef.current = "";
         ttsPlayed = playback.ok;
         ttsFirstAudioMs = playback.firstAudioMs ?? tts.firstAudioLatencyMs;
@@ -332,14 +378,16 @@ export function useVoiceTester() {
         });
       }
 
-      appendMessage({
-        id: id("msg"),
-        role: "assistant",
-        text: output.responseText,
-        createdAt: output.createdAt,
-        turnId: userTurnId,
-        status: output.metadata.handoffTriggered ? "tool" : "speaking"
-      });
+      if (!(config.orchestrationApproach === "agentic" && voiceModeEnabled && assistantText)) {
+        appendMessage({
+          id: assistantMessageId,
+          role: "assistant",
+          text: assistantText,
+          createdAt: assistantCreatedAt,
+          turnId: userTurnId,
+          status: output.metadata.handoffTriggered ? "tool" : "speaking"
+        });
+      }
 
       if (output.metadata.handoffTriggered) {
         appendMessage({
