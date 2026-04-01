@@ -55,6 +55,7 @@ export function useVoiceTester() {
   const hasStartedVoiceLoop = useRef(false);
   const [isVoiceSessionActive, setIsVoiceSessionActive] = useState(false);
   const activeAssistantSpeechRef = useRef("");
+  const recentAssistantSpeechRef = useRef<{ text: string; expiresAt: number }>({ text: "", expiresAt: 0 });
   const activeTurnToken = useRef(0);
   const activeTurnAbortController = useRef<AbortController | null>(null);
   const conversationStatusRef = useRef<TurnStatus>("idle");
@@ -80,9 +81,21 @@ export function useVoiceTester() {
 
   const normalizeSpeechText = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 
+  const rememberAssistantSpeech = (text: string, holdForMs = 2200) => {
+    const normalized = text.trim();
+    activeAssistantSpeechRef.current = normalized;
+    recentAssistantSpeechRef.current = {
+      text: normalized,
+      expiresAt: normalized ? Date.now() + holdForMs : 0
+    };
+  };
+
   const isLikelySpeakerEcho = (transcript: string) => {
     const normalizedTranscript = normalizeSpeechText(transcript);
-    const normalizedAssistant = normalizeSpeechText(activeAssistantSpeechRef.current);
+    const recentAssistantSpeech = recentAssistantSpeechRef.current.expiresAt > Date.now()
+      ? recentAssistantSpeechRef.current.text
+      : "";
+    const normalizedAssistant = normalizeSpeechText(activeAssistantSpeechRef.current || recentAssistantSpeech);
     if (!normalizedTranscript || !normalizedAssistant) return false;
 
     if (normalizedAssistant.includes(normalizedTranscript)) {
@@ -125,6 +138,7 @@ export function useVoiceTester() {
     activeTurnAbortController.current?.abort();
     activeTurnAbortController.current = null;
     activeAssistantSpeechRef.current = "";
+    recentAssistantSpeechRef.current = { text: "", expiresAt: 0 };
     stopSynthesizedAudio();
     setPlaybackStatus("stopped");
     setIsProcessing(false);
@@ -261,7 +275,7 @@ export function useVoiceTester() {
       let ttsFirstAudioMs = output.metadata.latency?.ttsFirstAudioMs;
 
       if (config.orchestrationApproach === "agentic" && voiceModeEnabled && output.responseText) {
-        activeAssistantSpeechRef.current = output.responseText;
+        rememberAssistantSpeech(output.responseText, 6000);
         const tts = await getSpeechSynthesis(output.responseText, buildTtsSettings(config.ttsVoiceStyle));
         const playback = await playSynthesizedAudio(tts);
         activeAssistantSpeechRef.current = "";
@@ -305,7 +319,7 @@ export function useVoiceTester() {
       setLastSession(session);
       setConversation((prev) => ({ ...prev, turns: [...prev.turns, turn] }));
       if (voiceModeEnabled && ttsPlayed && output.responseText) {
-        activeAssistantSpeechRef.current = output.responseText;
+        rememberAssistantSpeech(output.responseText);
       }
 
       if (output.fillerResponseText) {
@@ -342,8 +356,8 @@ export function useVoiceTester() {
       if (!(voiceModeEnabled && ttsPlayed)) {
         activeAssistantSpeechRef.current = "";
       }
-      setStatus(voiceModeEnabled && ttsPlayed ? "speaking" : "idle");
-      setPlaybackStatus(voiceModeEnabled && ttsPlayed ? "playing" : "unavailable");
+      setStatus("idle");
+      setPlaybackStatus(voiceModeEnabled && ttsPlayed ? "stopped" : "unavailable");
     } catch (error) {
       if (turnToken !== activeTurnToken.current) {
         return;
@@ -529,6 +543,7 @@ export function useVoiceTester() {
 
   const stopAudio = () => {
     activeAssistantSpeechRef.current = "";
+    recentAssistantSpeechRef.current = { text: "", expiresAt: 0 };
     stopSynthesizedAudio();
     setPlaybackStatus("stopped");
     setStatus("idle");
@@ -536,6 +551,7 @@ export function useVoiceTester() {
 
   const resetConversation = () => {
     activeAssistantSpeechRef.current = "";
+    recentAssistantSpeechRef.current = { text: "", expiresAt: 0 };
     hasStartedVoiceLoop.current = false;
     setIsVoiceSessionActive(false);
     interruptCurrentWork();
@@ -564,6 +580,10 @@ export function useVoiceTester() {
     }
 
     if (isProcessing) {
+      return;
+    }
+
+    if (conversation.status === "speaking" || playbackStatus === "playing" || isSynthesizedAudioPlaying()) {
       return;
     }
 
