@@ -439,13 +439,13 @@ export function useVoiceTester() {
   };
 
   const startListening = async () => {
-    setIsVoiceSessionActive(true);
     if (isProcessing) {
       interruptCurrentWork();
     }
     if (!hasMicrophonePermission.current) {
       const permission = await requestMicrophonePermission();
       if (!permission.granted) {
+        setIsVoiceSessionActive(false);
         appendMessage({
           id: id("msg"),
           role: "system",
@@ -458,6 +458,8 @@ export function useVoiceTester() {
       }
       hasMicrophonePermission.current = true;
     }
+
+    setIsVoiceSessionActive(true);
 
     if (capturePromise.current) {
       return;
@@ -506,6 +508,7 @@ export function useVoiceTester() {
     capturePromise.current = capture.result;
     if (!capture.ok) {
       const result = await capture.result;
+      setIsVoiceSessionActive(false);
       setSttState((prev) => ({ ...prev, providerMode: "unsupported", isListening: false }));
       appendMessage({
         id: id("msg"),
@@ -565,16 +568,14 @@ export function useVoiceTester() {
 
   useEffect(() => {
     if (voiceModeEnabled) {
-      setIsVoiceSessionActive(true);
       return;
     }
 
     void stopListening({ stopVoiceLoop: false });
-    setIsVoiceSessionActive(false);
   }, [voiceModeEnabled]);
 
   useEffect(() => {
-    if (!voiceModeEnabled || !isVoiceSessionActive) {
+    if (!isVoiceSessionActive) {
       return;
     }
 
