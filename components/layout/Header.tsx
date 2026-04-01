@@ -17,6 +17,9 @@ export function Header() {
           <Link className="text-neutral-700 hover:text-neutral-900" href="/knowledge-base">
             Knowledge Base
           </Link>
+          <Link className="text-neutral-700 hover:text-neutral-900" href="/settings">
+            Settings
+          </Link>
           <Link className="text-neutral-700 hover:text-neutral-900" href="/ops">
             Ops QA
           </Link>

@@ -8,16 +8,7 @@ import { ToolName } from "@/tools/toolTypes";
 import { useVoiceTester } from "@/state/useVoiceTester";
 import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
 import { DashboardRuntimeConfig, IntentUnderstandingMode, OrchestrationApproach, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
-
-const AGENT_PROFILES_STORAGE_KEY = "voiceai.agent.profiles.v1";
-const ACTIVE_AGENT_STORAGE_KEY = "voiceai.agent.active.id.v1";
-
-interface AgentProfile {
-  id: string;
-  name: string;
-  description: string;
-  config: DashboardRuntimeConfig;
-}
+import { ACTIVE_AGENT_STORAGE_KEY, AGENT_PROFILES_STORAGE_KEY, AgentProfile } from "@/state/agentProfilesStorage";
 
 function cloneConfig(config: DashboardRuntimeConfig): DashboardRuntimeConfig {
   return JSON.parse(JSON.stringify(config)) as DashboardRuntimeConfig;
@@ -378,7 +369,10 @@ export function VoiceTesterPage() {
               <button type="button" onClick={createAgentFromCurrent} className="rounded-lg border border-blue-300 bg-blue-50 px-2 py-2 font-medium text-blue-700">New from current</button>
               <button type="button" onClick={deleteActiveAgent} disabled={agentProfiles.length <= 1} className="col-span-2 rounded-lg border border-rose-200 px-2 py-2 text-rose-700 disabled:opacity-50">Delete active agent</button>
             </div>
-            <p className="text-slate-500">Tip: tune the Configuration section below, then click <strong>Save current settings</strong> to persist this agent profile.</p>
+            <p className="text-slate-500">Tip: tune the Configuration section below, then click <strong>Save current settings</strong> to persist this agent profile. Use the dedicated settings page to edit per-agent instructions.</p>
+            <Link href="/settings" className="block rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center text-xs font-medium text-blue-800">
+              Open settings page for per-agent instructions
+            </Link>
             {activeAgent?.description && <p className="rounded-lg bg-slate-50 p-2 text-slate-600">{activeAgent.description}</p>}
           </div>
         </SectionCard>

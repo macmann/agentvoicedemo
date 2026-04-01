@@ -36,6 +36,7 @@ export interface DashboardRuntimeConfig {
   troubleshootingKbMode: "off" | "on";
   troubleshootingKbSource: string;
   uploadedTroubleshootingKbs: UploadedTroubleshootingKbFile[];
+  agentInstructions: string;
 }
 
 export const DASHBOARD_RUNTIME_STORAGE_KEY = "voiceai.dashboard.runtime.config.v1";
@@ -59,7 +60,8 @@ const DEFAULT_CONFIG: DashboardRuntimeConfig = {
   debugVerbosity: "detailed",
   troubleshootingKbMode: "on",
   troubleshootingKbSource: "/public/kb/troubleshooting.md",
-  uploadedTroubleshootingKbs: []
+  uploadedTroubleshootingKbs: [],
+  agentInstructions: ""
 };
 
 export type DemoPresetKey = "stable_mock_demo" | "live_outage_api_demo" | "mixed_mode_demo" | "fast_latency_demo" | "clarification_handoff_demo";
@@ -101,7 +103,8 @@ function sanitizeConfig(raw: unknown): DashboardRuntimeConfig {
           .filter((file) => file.name.trim() && file.markdown.trim())
       : DEFAULT_CONFIG.uploadedTroubleshootingKbs,
     ttsVoiceStyle: typeof candidate.ttsVoiceStyle === "string" && candidate.ttsVoiceStyle.trim() ? candidate.ttsVoiceStyle : DEFAULT_CONFIG.ttsVoiceStyle,
-    toolConfig: sanitizeRuntimeToolConfig(candidate.toolConfig ?? {})
+    toolConfig: sanitizeRuntimeToolConfig(candidate.toolConfig ?? {}),
+    agentInstructions: typeof candidate.agentInstructions === "string" ? candidate.agentInstructions : DEFAULT_CONFIG.agentInstructions
   };
 }
 

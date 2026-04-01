@@ -17,6 +17,7 @@ export interface RunAgenticTurnInput {
   troubleshootingKbMode?: "off" | "on";
   troubleshootingKbSource?: string;
   uploadedTroubleshootingKbs?: InlineTroubleshootingKbFile[];
+  agentInstructions?: string;
   onStage?: (stage: VoicePhase) => void;
 }
 
@@ -76,6 +77,10 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
     return execution.toolResult.status === "success" ? execution.toolResult.result : { error: execution.toolResult.error };
   };
 
+  const customInstructions = input.agentInstructions?.trim();
+  const baseAgentInstruction = "You are an enterprise support voice agent. Decide directly whether to call a tool. No intent classification. Use tools when status or diagnostics are needed. Never answer with general world knowledge. If a needed fact is not in tool output or provided context, say you cannot verify it yet and ask a clarifying question or run a tool. Keep responses concise and user-friendly.";
+  const combinedAgentInstruction = customInstructions ? `${baseAgentInstruction}\n\nAdditional instructions for this saved agent profile:\n${customInstructions}` : baseAgentInstruction;
+
   if (homeInternetIssueDetected && troubleshootingMode === "on") {
     try {
       const kb = input.uploadedTroubleshootingKbs?.length
@@ -111,8 +116,9 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
       const kbGroundedAgent = new Agent({
         name: "TroubleshootingKbResponder",
         model: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
-        instructions:
-          "You are a support responder using only the provided troubleshooting KB excerpt and prior troubleshooting state. Do not invent steps. Ask at most one follow-up question. Keep to 2 short paragraphs max."
+        instructions: customInstructions
+          ? `You are a support responder using only the provided troubleshooting KB excerpt and prior troubleshooting state. Do not invent steps. Ask at most one follow-up question. Keep to 2 short paragraphs max.\n\nAdditional instructions for this saved agent profile:\n${customInstructions}`
+          : "You are a support responder using only the provided troubleshooting KB excerpt and prior troubleshooting state. Do not invent steps. Ask at most one follow-up question. Keep to 2 short paragraphs max."
       });
 
       const kbPrompt = [
@@ -178,8 +184,7 @@ export async function runAgenticTurn(input: RunAgenticTurnInput): Promise<RunAge
   const agent = new Agent({
     name: "AgenticSupportOrchestrator",
     model: process.env.OPENAI_AGENT_MODEL || "gpt-4.1-mini",
-    instructions:
-      "You are an enterprise support voice agent. Decide directly whether to call a tool. No intent classification. Use tools when status or diagnostics are needed. Never answer with general world knowledge. If a needed fact is not in tool output or provided context, say you cannot verify it yet and ask a clarifying question or run a tool. Keep responses concise and user-friendly.",
+    instructions: combinedAgentInstruction,
     tools: [
       tool({
         name: "check_outage_status",
