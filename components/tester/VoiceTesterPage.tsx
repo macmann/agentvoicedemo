@@ -1,13 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { TOOL_NAMES } from "@/tools/runtimeToolConfig";
 import { ToolName } from "@/tools/toolTypes";
 import { useVoiceTester } from "@/state/useVoiceTester";
 import { TesterLatencyMetrics, TesterMessage } from "@/types/tester";
-import { IntentUnderstandingMode, OrchestrationApproach, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
+import { DashboardRuntimeConfig, IntentUnderstandingMode, OrchestrationApproach, PostToolResponseMode } from "@/state/useDashboardRuntimeConfig";
+
+const AGENT_PROFILES_STORAGE_KEY = "voiceai.agent.profiles.v1";
+const ACTIVE_AGENT_STORAGE_KEY = "voiceai.agent.active.id.v1";
+
+interface AgentProfile {
+  id: string;
+  name: string;
+  description: string;
+  config: DashboardRuntimeConfig;
+}
+
+function cloneConfig(config: DashboardRuntimeConfig): DashboardRuntimeConfig {
+  return JSON.parse(JSON.stringify(config)) as DashboardRuntimeConfig;
+}
 
 function StatusPill({ label, active }: { label: string; active: boolean }) {
   return (
@@ -106,6 +120,11 @@ function renderPreToolReason(latestTurn: ReturnType<typeof useVoiceTester>["late
 
 export function VoiceTesterPage() {
   const [text, setText] = useState("");
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string>("");
+  const [agentNameDraft, setAgentNameDraft] = useState("");
+  const [agentDescriptionDraft, setAgentDescriptionDraft] = useState("");
+  const [profileBootstrapped, setProfileBootstrapped] = useState(false);
   const {
     conversation,
     latestTurn,
@@ -134,6 +153,63 @@ export function VoiceTesterPage() {
     toolHistory
   } = useVoiceTester();
 
+  useEffect(() => {
+    try {
+      const storedProfiles = window.localStorage.getItem(AGENT_PROFILES_STORAGE_KEY);
+      const storedActiveId = window.localStorage.getItem(ACTIVE_AGENT_STORAGE_KEY);
+      if (!storedProfiles) {
+        const starterId = crypto.randomUUID();
+        const starter: AgentProfile = {
+          id: starterId,
+          name: "Default Support Agent",
+          description: "Starter agent profile. Edit runtime knobs, then save to update this profile.",
+          config: cloneConfig(dashboardConfig)
+        };
+        setAgentProfiles([starter]);
+        setActiveAgentId(starterId);
+        setAgentNameDraft(starter.name);
+        setAgentDescriptionDraft(starter.description);
+        setProfileBootstrapped(true);
+        return;
+      }
+
+      const parsedProfiles = JSON.parse(storedProfiles) as AgentProfile[];
+      if (!Array.isArray(parsedProfiles) || parsedProfiles.length === 0) throw new Error("invalid profiles");
+      setAgentProfiles(parsedProfiles);
+      const resolvedActiveId = parsedProfiles.some((item) => item.id === storedActiveId) ? (storedActiveId as string) : parsedProfiles[0].id;
+      setActiveAgentId(resolvedActiveId);
+      const activeProfile = parsedProfiles.find((item) => item.id === resolvedActiveId) ?? parsedProfiles[0];
+      setDashboardConfig(() => cloneConfig(activeProfile.config));
+      setAgentNameDraft(activeProfile.name);
+      setAgentDescriptionDraft(activeProfile.description);
+      setProfileBootstrapped(true);
+    } catch {
+      const fallbackId = crypto.randomUUID();
+      const fallback: AgentProfile = {
+        id: fallbackId,
+        name: "Default Support Agent",
+        description: "Recovered fallback profile.",
+        config: cloneConfig(dashboardConfig)
+      };
+      setAgentProfiles([fallback]);
+      setActiveAgentId(fallbackId);
+      setAgentNameDraft(fallback.name);
+      setAgentDescriptionDraft(fallback.description);
+      setProfileBootstrapped(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!profileBootstrapped || !agentProfiles.length) return;
+    window.localStorage.setItem(AGENT_PROFILES_STORAGE_KEY, JSON.stringify(agentProfiles));
+  }, [agentProfiles, profileBootstrapped]);
+
+  useEffect(() => {
+    if (!profileBootstrapped || !activeAgentId) return;
+    window.localStorage.setItem(ACTIVE_AGENT_STORAGE_KEY, activeAgentId);
+  }, [activeAgentId, profileBootstrapped]);
+
   const status = conversation.status;
   const empty = conversation.messages.length === 0;
   const liveTranscript = sttState.finalTranscript || sttState.interimTranscript;
@@ -155,6 +231,7 @@ export function VoiceTesterPage() {
   };
 
   const summaryRows = [
+    ["Agent", agentProfiles.find((item) => item.id === activeAgentId)?.name ?? "-"],
     ["Approach", dashboardConfig.orchestrationApproach],
     ["Input mode", latestTurn?.metadata.intentUnderstandingMode ?? "-"],
     ["Support intent", latestTurn?.metadata.supportIntent ?? "none"],
@@ -164,6 +241,58 @@ export function VoiceTesterPage() {
     ["Clarification", latestTurn?.metadata.clarificationReason ?? "none"],
     ["Pre-tool decision", renderPreToolReason(latestTurn)]
   ] as const;
+
+  const activeAgent = agentProfiles.find((item) => item.id === activeAgentId);
+
+  const applyAgent = (nextAgentId: string) => {
+    const profile = agentProfiles.find((item) => item.id === nextAgentId);
+    if (!profile) return;
+    setActiveAgentId(nextAgentId);
+    setDashboardConfig(() => cloneConfig(profile.config));
+    setAgentNameDraft(profile.name);
+    setAgentDescriptionDraft(profile.description);
+  };
+
+  const saveCurrentAgent = () => {
+    if (!activeAgentId) return;
+    setAgentProfiles((prev) =>
+      prev.map((item) =>
+        item.id === activeAgentId
+          ? {
+              ...item,
+              name: agentNameDraft.trim() || item.name,
+              description: agentDescriptionDraft.trim(),
+              config: cloneConfig(dashboardConfig)
+            }
+          : item
+      )
+    );
+  };
+
+  const createAgentFromCurrent = () => {
+    const id = crypto.randomUUID();
+    const profile: AgentProfile = {
+      id,
+      name: `Agent ${agentProfiles.length + 1}`,
+      description: "New profile cloned from current runtime settings.",
+      config: cloneConfig(dashboardConfig)
+    };
+    setAgentProfiles((prev) => [...prev, profile]);
+    setActiveAgentId(id);
+    setAgentNameDraft(profile.name);
+    setAgentDescriptionDraft(profile.description);
+  };
+
+  const deleteActiveAgent = () => {
+    if (agentProfiles.length <= 1 || !activeAgentId) return;
+    const nextProfiles = agentProfiles.filter((item) => item.id !== activeAgentId);
+    const nextActive = nextProfiles[0];
+    setAgentProfiles(nextProfiles);
+    setActiveAgentId(nextActive.id);
+    setDashboardConfig(() => cloneConfig(nextActive.config));
+    setAgentNameDraft(nextActive.name);
+    setAgentDescriptionDraft(nextActive.description);
+  };
 
   return (
     <main className="grid min-h-[calc(100dvh-12rem)] gap-4 lg:grid-cols-2">
@@ -226,6 +355,34 @@ export function VoiceTesterPage() {
       </section>
 
       <aside className="min-h-[52rem] space-y-3 overflow-y-auto">
+        <SectionCard title="Agent profiles" description="Create and switch between multiple agent configurations.">
+          <div className="space-y-2 text-xs">
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Active agent</span>
+              <select className="w-full rounded-lg border border-blue-300 bg-white p-2" value={activeAgentId} onChange={(e) => applyAgent(e.target.value)}>
+                {agentProfiles.map((agent) => (
+                  <option key={agent.id} value={agent.id}>{agent.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Agent name</span>
+              <input className="w-full rounded-lg border border-slate-300 p-2" value={agentNameDraft} onChange={(e) => setAgentNameDraft(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-medium text-slate-700">Intent / KB / API / tools notes</span>
+              <textarea className="min-h-20 w-full rounded-lg border border-slate-300 p-2" value={agentDescriptionDraft} onChange={(e) => setAgentDescriptionDraft(e.target.value)} placeholder="Describe intent behavior, KB strategy, APIs, tool restrictions, and custom instructions." />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={saveCurrentAgent} className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-2 font-medium text-emerald-700">Save current settings</button>
+              <button type="button" onClick={createAgentFromCurrent} className="rounded-lg border border-blue-300 bg-blue-50 px-2 py-2 font-medium text-blue-700">New from current</button>
+              <button type="button" onClick={deleteActiveAgent} disabled={agentProfiles.length <= 1} className="col-span-2 rounded-lg border border-rose-200 px-2 py-2 text-rose-700 disabled:opacity-50">Delete active agent</button>
+            </div>
+            <p className="text-slate-500">Tip: tune the Configuration section below, then click <strong>Save current settings</strong> to persist this agent profile.</p>
+            {activeAgent?.description && <p className="rounded-lg bg-slate-50 p-2 text-slate-600">{activeAgent.description}</p>}
+          </div>
+        </SectionCard>
+
         <SectionCard title="Configuration" description="All runtime toggles are grouped here for quick tuning.">
           <div className="space-y-3 text-xs">
             <label className="block">
