@@ -189,7 +189,7 @@ export function VoiceTesterPage() {
           <LatencyPanel latency={latestTurn?.metadata.latency} providerMode={latestTurn?.metadata.providerMode} />
         </div>
 
-        <div className="min-h-[18rem] flex-1 space-y-3 overflow-y-auto bg-slate-50/60 px-4 py-4 lg:min-h-0">
+        <div className="min-h-[54rem] flex-1 space-y-3 overflow-y-auto bg-slate-50/60 px-4 py-4 lg:min-h-0">
           {empty && <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Try: “Is there an outage?”, “Is FTTH in Berlin down?”, “Any upcoming announcements?”, or “I want to speak to a human.”</div>}
           {conversation.messages.map((message) => {
             const turn = message.turnId ? conversation.turns.find((item) => item.id === message.turnId) : undefined;

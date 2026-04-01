@@ -23,11 +23,12 @@ function buildTtsSettings(voiceStyle: string) {
   };
 }
 
-const initialConversation = (): TesterConversationState => ({
+const initialConversation = (overrides?: Partial<TesterConversationState>): TesterConversationState => ({
   sessionId: crypto.randomUUID(),
   turns: [],
   messages: [],
-  status: "idle"
+  status: "idle",
+  ...overrides
 });
 
 const initialSttState = (): TesterSttState => ({
@@ -41,13 +42,7 @@ const initialSttState = (): TesterSttState => ({
 });
 
 export function useVoiceTester() {
-  const [conversation, setConversation] = useState<TesterConversationState>(() => {
-    const initial = initialConversation();
-    return {
-      ...initial,
-      turns: loadStoredTurns()
-    };
-  });
+  const [conversation, setConversation] = useState<TesterConversationState>(() => initialConversation());
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(true);
   const [lastSession, setLastSession] = useState<SessionState>();
@@ -138,6 +133,12 @@ export function useVoiceTester() {
   useEffect(() => {
     conversationStatusRef.current = conversation.status;
   }, [conversation.status]);
+
+  useEffect(() => {
+    const storedTurns = loadStoredTurns();
+    if (!storedTurns.length) return;
+    setConversation((prev) => ({ ...prev, turns: storedTurns }));
+  }, []);
 
   useEffect(() => {
     saveStoredTurns(conversation.turns);
