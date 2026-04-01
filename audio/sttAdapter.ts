@@ -161,7 +161,7 @@ export async function requestMicrophonePermission() {
 export function startMicrophoneCapture(options: StartMicOptions = {}) {
   const {
     language = "en-US",
-    silenceThresholdMs = 1000,
+    silenceThresholdMs = 1600,
     speechEnergyThreshold = 0.02,
     maxNoSpeechMs = 30000,
     onInterimTranscript,
@@ -196,6 +196,7 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
   const result = new Promise<BrowserMicCaptureResult>((resolve) => {
     activeFinalize = resolve;
     let finalizedTranscript = "";
+    let latestInterimTranscript = "";
     let bestConfidence = 0;
 
     recognition.onresult = (event) => {
@@ -209,6 +210,7 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
         if (!text) continue;
         if (eventResults[i].isFinal) {
           finalizedTranscript = `${finalizedTranscript} ${text}`.trim();
+          latestInterimTranscript = "";
           bestConfidence = Math.max(bestConfidence, typeof segment.confidence === "number" ? segment.confidence : 0.8);
           onFinalTranscript?.(finalizedTranscript);
         } else {
@@ -216,6 +218,7 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
         }
       }
 
+      latestInterimTranscript = interim.trim();
       onInterimTranscript?.(interim);
     };
 
@@ -230,12 +233,14 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
     };
 
     recognition.onend = () => {
-      const transcript = finalizedTranscript.trim();
+      const transcript = finalizedTranscript.trim() || latestInterimTranscript.trim();
       if (transcript) {
         finalizeCapture({
           transcript,
-          confidence: bestConfidence || 0.8,
-          status: "recognized",
+          confidence: bestConfidence || (finalizedTranscript.trim() ? 0.8 : 0.62),
+          status: finalizedTranscript.trim() ? "recognized" : "fallback",
+          failureType: finalizedTranscript.trim() ? undefined : "low_confidence",
+          reason: finalizedTranscript.trim() ? undefined : "Used latest interim transcript because no final segment was emitted before recording stopped.",
           timestamps: [{ startMs: 0, endMs: Date.now() - activeStartTime, text: transcript }]
         });
         return;
