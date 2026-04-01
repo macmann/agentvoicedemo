@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     troubleshootingKbMode?: "off" | "on";
     troubleshootingKbSource?: string;
     uploadedTroubleshootingKbs?: InlineTroubleshootingKbFile[];
+    agentInstructions?: string;
   };
 
   const output = await runAgenticTurn({
@@ -24,7 +25,8 @@ export async function POST(req: Request) {
     ttsVoiceStyle: body.ttsVoiceStyle,
     troubleshootingKbMode: body.troubleshootingKbMode,
     troubleshootingKbSource: body.troubleshootingKbSource,
-    uploadedTroubleshootingKbs: body.uploadedTroubleshootingKbs
+    uploadedTroubleshootingKbs: body.uploadedTroubleshootingKbs,
+    agentInstructions: body.agentInstructions
   });
 
   return Response.json(output);

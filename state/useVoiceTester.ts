@@ -239,7 +239,8 @@ export function useVoiceTester() {
               ttsVoiceStyle: config.ttsVoiceStyle,
               troubleshootingKbMode: config.troubleshootingKbMode,
               troubleshootingKbSource: config.troubleshootingKbSource,
-              uploadedTroubleshootingKbs: config.uploadedTroubleshootingKbs
+              uploadedTroubleshootingKbs: config.uploadedTroubleshootingKbs,
+              agentInstructions: config.agentInstructions
             })
             });
             return response.json();
