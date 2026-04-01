@@ -166,8 +166,8 @@ export function VoiceTesterPage() {
   ] as const;
 
   return (
-    <main className="grid gap-4 lg:h-[calc(100dvh-12rem)] lg:grid-cols-[minmax(0,1fr)_390px]">
-      <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:h-full">
+    <main className="grid min-h-[calc(100dvh-12rem)] gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
+      <section className="flex min-h-[42rem] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -225,7 +225,7 @@ export function VoiceTesterPage() {
         </form>
       </section>
 
-      <aside className="space-y-3 lg:max-h-full lg:overflow-y-auto">
+      <aside className="space-y-3 overflow-y-auto lg:max-h-[calc(100dvh-12rem)]">
         <SectionCard title="Configuration" description="All runtime toggles are grouped here for quick tuning.">
           <div className="space-y-3 text-xs">
             <label className="block">
