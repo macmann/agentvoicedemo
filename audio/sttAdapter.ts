@@ -163,7 +163,7 @@ export function startMicrophoneCapture(options: StartMicOptions = {}) {
     language = "en-US",
     silenceThresholdMs = 1000,
     speechEnergyThreshold = 0.02,
-    maxNoSpeechMs = 9000,
+    maxNoSpeechMs = 30000,
     onInterimTranscript,
     onFinalTranscript,
     onSpeechState,
